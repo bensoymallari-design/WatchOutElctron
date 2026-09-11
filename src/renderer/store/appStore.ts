@@ -58,6 +58,7 @@ interface AppState {
   fpsNow: number;
   liveTick: number;
   showPath: string | null;
+  contentGen: number;
 }
 
 interface AppActions {
@@ -158,7 +159,7 @@ function patchShow(state: AppState, mutator: (show: Show) => Show, record = true
   const next = mutator(structuredClone(state.show));
   next.modifiedAt = new Date().toISOString();
   const history = record ? [...state.history.slice(-49), snapshot(state.show)] : state.history;
-  return { show: next, history, future: record ? [] : state.future };
+  return { show: next, history, future: record ? [] : state.future, contentGen: state.contentGen + 1 };
 }
 
 function activeTimeline(show: Show | null, id: string | null) {
@@ -194,13 +195,14 @@ export const useApp = create<AppState & AppActions>((set, get) => ({
   fpsNow: 60,
   liveTick: 0,
   showPath: null,
+  contentGen: 0,
 
   boot: () => {
     const apply = (recents: RecentShow[], presets: Record<number, WindowLayout[]>) => set({ recents, presets });
     apply(loadRecents(), loadLayouts({}));
     void window.watchout?.recents().then((recents) => set({ recents }));
     void window.watchout?.ffmpegReady().then((ok) => {
-      if (ok) get().log("ffmpeg ready — HAP / ProRes / H.264 will build VP9 playback proxies");
+      if (ok) get().log("ffmpeg ready — HAP / ProRes / H.264 will build VP8+Opus proxies (picture + soundtrack)");
       else get().log("ffmpeg not found. Install ffmpeg for extra codec proxies (HAP, ProRes, H.264).", "warn");
     });
     void window.watchout?.gpuInfo().then((info) => {

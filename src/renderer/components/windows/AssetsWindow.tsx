@@ -164,6 +164,14 @@ function AssetPreview({ asset }: { asset?: Asset }) {
     );
   }
 
+  if (asset.kind === "audio" && asset.url) {
+    return (
+      <div className="mb-2 rounded border border-[#333] bg-black/40 p-2">
+        <audio src={asset.url} controls className="w-full" />
+      </div>
+    );
+  }
+
   if (asset.url && !asset.url.startsWith("procedural:")) {
     return (
       <div className="checker mb-2 grid aspect-video place-items-center overflow-hidden rounded border border-[#333]">

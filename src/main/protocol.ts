@@ -12,6 +12,7 @@ export function registerMediaScheme() {
         stream: true,
         bypassCSP: true,
         corsEnabled: true,
+        allowServiceWorkers: false,
       },
     },
   ]);
@@ -19,9 +20,13 @@ export function registerMediaScheme() {
 
 export function handleMediaProtocol() {
   protocol.handle("watchout", (request) => {
-    const url = new URL(request.url);
-    const filePath = url.searchParams.get("path");
-    if (!filePath) return new Response("missing media", { status: 400 });
-    return net.fetch(pathToFileURL(filePath).href);
+    try {
+      const url = new URL(request.url);
+      const filePath = url.searchParams.get("path") || decodeURIComponent(url.pathname.replace(/^\/+/, ""));
+      if (!filePath) return new Response("missing media", { status: 400 });
+      return net.fetch(pathToFileURL(filePath).href);
+    } catch {
+      return new Response("bad media url", { status: 400 });
+    }
   });
 }

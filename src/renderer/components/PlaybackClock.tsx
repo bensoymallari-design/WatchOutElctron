@@ -1,17 +1,19 @@
 import { useEffect, useRef } from "react";
 import { useApp } from "@/store/appStore";
+import { stopPlaybackAudio, syncPlaybackAudio } from "@/lib/playbackAudio";
 
 export function PlaybackClock() {
   const setFpsNow = useApp((s) => s.setFpsNow);
   const frames = useRef(0);
   const stamp = useRef(0);
   const last = useRef(0);
-  const lastShow = useRef<unknown>(null);
+  const lastGen = useRef(-1);
+  const lastShowId = useRef<string>("");
 
   useEffect(() => {
     const step = (now: number) => {
       if (last.current === 0) last.current = now;
-      const dt = Math.min(100, now - last.current);
+      const dt = Math.min(50, now - last.current);
       last.current = now;
       const state = useApp.getState();
       const playing = state.show?.timelines.some((t) => t.playback === "play");
@@ -23,10 +25,12 @@ export function PlaybackClock() {
         frames.current = 0;
         stamp.current = now;
       }
-      const show = useApp.getState().show;
+      const latest = useApp.getState();
+      const show = latest.show;
       if (show && window.watchout) {
-        if (show !== lastShow.current) {
-          lastShow.current = show;
+        if (latest.contentGen !== lastGen.current || show.id !== lastShowId.current) {
+          lastGen.current = latest.contentGen;
+          lastShowId.current = show.id;
           window.watchout.pushShow(show);
         }
         window.watchout.pushClock({
@@ -39,6 +43,7 @@ export function PlaybackClock() {
           })),
         });
       }
+      syncPlaybackAudio(show);
     };
     let raf = 0;
     const loop = (now: number) => {
@@ -46,10 +51,9 @@ export function PlaybackClock() {
       raf = requestAnimationFrame(loop);
     };
     raf = requestAnimationFrame(loop);
-    const iv = window.setInterval(() => step(performance.now()), 16);
     return () => {
       cancelAnimationFrame(raf);
-      window.clearInterval(iv);
+      stopPlaybackAudio();
     };
   }, [setFpsNow]);
 
