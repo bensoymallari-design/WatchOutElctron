@@ -103,9 +103,25 @@ export function DevicesWindow() {
               {s.isPrimary ? " · primary" : ""}
               <span className="ml-2 text-stone-500">
                 {s.width}×{s.height}
+                {s.scaleFactor > 1.01
+                  ? ` · ${s.physicalWidth}×${s.physicalHeight} px @ ${s.scaleFactor}×`
+                  : s.physicalWidth && s.physicalWidth !== s.width
+                    ? ` · ${s.physicalWidth}×${s.physicalHeight} px`
+                    : ""}
               </span>
             </span>
-            <button
+            <span className="flex shrink-0 gap-1">
+              <button
+                className="rounded bg-[#14532d] px-2 py-0.5 text-[11px] text-emerald-100"
+                onClick={() => {
+                  const display = show.displays[0];
+                  if (display) useApp.getState().select({ kind: "display", ids: [display.id] });
+                  void useApp.getState().applyMonitorSize(s.id);
+                }}
+              >
+                Use size
+              </button>
+              <button
               className="shrink-0 rounded bg-[#333] px-2 py-0.5 text-[11px]"
               onClick={() => {
                 const display = show.displays[0];
@@ -117,9 +133,13 @@ export function DevicesWindow() {
             >
               Output here
             </button>
+            </span>
           </div>
         ))}
         <p className="px-3 py-2 text-[10px] leading-relaxed text-stone-500">{screenNote}</p>
+        <p className="px-3 pb-2 text-[10px] leading-relaxed text-stone-500">
+          Use size copies the monitor’s real pixels onto the selected WATCHOUT display (4K TV → 3840×2160). Then Import video and Rebuild HQ so playback stays sharp and keeps audio.
+        </p>
       </Section>
       <Section title="Audio">
         {show.audioDevices.map((d) => (

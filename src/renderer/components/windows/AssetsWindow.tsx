@@ -24,6 +24,12 @@ export function AssetsWindow() {
           Import
         </button>
         <button
+          className="rounded bg-[#333] px-2 py-0.5 text-stone-200"
+          onClick={() => void useApp.getState().rebuildStaleMedia()}
+        >
+          Rebuild HQ
+        </button>
+        <button
           className="rounded bg-[#14532d] px-2 py-0.5 text-emerald-100"
           onClick={() => useApp.getState().setDialog("ndiSource")}
         >

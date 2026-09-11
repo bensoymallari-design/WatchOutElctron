@@ -1,6 +1,7 @@
 
 import { useEffect } from "react";
 import { useApp } from "@/store/appStore";
+import { unlockPlaybackAudio } from "@/lib/playbackAudio";
 
 export function Keyboard() {
   useEffect(() => {
@@ -103,6 +104,7 @@ export function Keyboard() {
       if (e.key === " " || e.code === "Space") {
         e.preventDefault();
         if (!tl) return;
+        unlockPlaybackAudio();
         a.setPlayback(tl.id, tl.playback === "play" ? "pause" : "play");
         return;
       }

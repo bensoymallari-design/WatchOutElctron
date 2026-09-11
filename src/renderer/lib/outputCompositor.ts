@@ -2,6 +2,7 @@ import type { Asset, Show } from "@/types/show";
 import { collectStageCues } from "@/lib/stageCues";
 import { getLiveVideo } from "@/lib/liveSources";
 import { drawProcedural } from "@/lib/procedural";
+import { applyAudioSink } from "@/lib/audioSink";
 
 interface LayerEls {
   wrap: HTMLDivElement;
@@ -23,7 +24,7 @@ function ensureRoot(host: HTMLElement) {
   return clip;
 }
 
-export function syncOutputFrame(host: HTMLElement, show: Show, displayId: string) {
+export function syncOutputFrame(host: HTMLElement, show: Show, displayId: string, playAudio = false) {
   const display = show.displays.find((d) => d.id === displayId) ?? show.displays[0];
   if (!display) return;
   const clip = ensureRoot(host);
@@ -47,6 +48,33 @@ export function syncOutputFrame(host: HTMLElement, show: Show, displayId: string
     const cue = ev.cue;
     if (cue.type !== "media") continue;
     const asset = cue.assetId ? assets.get(cue.assetId) : undefined;
+    if (asset?.kind === "audio") {
+      if (!playAudio) continue;
+      seen.add(cue.id);
+      let layer = layers.get(cue.id);
+      if (!layer) {
+        const wrap = document.createElement("div");
+        wrap.style.cssText = "position:absolute;left:0;top:0;width:2px;height:2px;overflow:hidden;opacity:0.02;pointer-events:none";
+        const media = makeMedia(asset, cue.id, true);
+        wrap.appendChild(media);
+        clip.appendChild(wrap);
+        layer = { wrap, media };
+        layers.set(cue.id, layer);
+      }
+      if (layer.media instanceof HTMLVideoElement) {
+        if (asset.url && layer.media.getAttribute("data-src") !== asset.url) {
+          layer.media.src = asset.url;
+          layer.media.setAttribute("data-src", asset.url);
+        }
+        const vol = Math.max(0, Math.min(1, ev.volume / 100));
+        layer.media.muted = vol <= 0.001;
+        layer.media.volume = vol;
+        applyAudioSink(layer.media, true);
+        syncVideo(layer.media, ev.localTime, playing, cue.freeRunning);
+      }
+      continue;
+    }
+
     const aw = asset?.width || 1920;
     const ah = asset?.height || 1080;
     const w = aw * (ev.scaleX / 100) * scale;
@@ -61,7 +89,7 @@ export function syncOutputFrame(host: HTMLElement, show: Show, displayId: string
     if (!layer) {
       const wrap = document.createElement("div");
       wrap.style.cssText = "position:absolute;overflow:hidden;pointer-events:none;transform-origin:center center";
-      const media = makeMedia(asset, cue.id);
+      const media = makeMedia(asset, cue.id, playAudio);
       wrap.appendChild(media);
       clip.appendChild(wrap);
       layer = { wrap, media };
@@ -76,10 +104,14 @@ export function syncOutputFrame(host: HTMLElement, show: Show, displayId: string
     wrap.style.zIndex = String(Math.round(ev.z + 1000));
     wrap.style.transform = ev.rotZ ? `rotate(${ev.rotZ}deg)` : "none";
     wrap.style.filter = cssFilter(ev);
+    wrap.style.willChange = "transform, opacity";
     media.style.width = "100%";
     media.style.height = "100%";
     media.style.objectFit = "fill";
     media.style.display = "block";
+    if (media instanceof HTMLVideoElement) {
+      media.style.transform = "translateZ(0)";
+    }
 
     if (media instanceof HTMLVideoElement) {
       const live = asset ? getLiveVideo(asset.id) : null;
@@ -95,6 +127,14 @@ export function syncOutputFrame(host: HTMLElement, show: Show, displayId: string
         void media.play().catch(() => undefined);
       }
       syncVideo(media, ev.localTime, playing, cue.freeRunning);
+      const vol = Math.max(0, Math.min(1, ev.volume / 100));
+      if (playAudio) {
+        media.muted = vol <= 0.001;
+        media.volume = vol;
+        applyAudioSink(media, true);
+      } else {
+        media.muted = true;
+      }
     } else if (media instanceof HTMLCanvasElement && asset) {
       const kind = asset.url.startsWith("procedural:") ? asset.url.slice("procedural:".length) : "ndi";
       const ctx = media.getContext("2d");
@@ -125,12 +165,10 @@ export function syncOutputFrame(host: HTMLElement, show: Show, displayId: string
   }
 }
 
-function makeMedia(asset: Asset | undefined, cueId: string) {
-  if (asset?.kind === "video") {
+function makeMedia(asset: Asset | undefined, cueId: string, playAudio: boolean) {
+  if (asset?.kind === "video" || asset?.kind === "audio") {
     const v = document.createElement("video");
-    // Outputs stay silent so a 3-wide LED wall does not triple the soundtrack.
-    // Producer plays audio from the show clock (see playbackAudio.ts).
-    v.muted = true;
+    v.muted = !playAudio;
     v.playsInline = true;
     v.loop = true;
     v.preload = "auto";
@@ -147,7 +185,7 @@ function makeMedia(asset: Asset | undefined, cueId: string) {
     void v.play().catch(() => undefined);
     return v;
   }
-  if (asset?.kind === "ndi" || asset?.kind === "capture" || asset?.url.startsWith("procedural:")) {
+  if (asset?.kind === "ndi" || asset?.kind === "capture" || asset?.url?.startsWith("procedural:")) {
     return document.createElement("canvas");
   }
   const img = document.createElement("img");

@@ -15,13 +15,17 @@ function api() {
 
 export function subscribeOutputs(fn: () => void) {
   listeners.add(fn);
+  let gen = 0;
   const off = api()?.onOutputsChanged((ids) => {
+    gen += 1;
     live = new Set(ids);
     emit();
   });
+  const started = gen;
   void api()
     ?.liveOutputs()
     .then((ids) => {
+      if (gen !== started) return;
       live = new Set(ids);
       emit();
     });
@@ -29,6 +33,10 @@ export function subscribeOutputs(fn: () => void) {
     listeners.delete(fn);
     off?.();
   };
+}
+
+export function hasLiveOutputs() {
+  return live.size > 0;
 }
 
 export function isOutputLive(displayId: string) {
@@ -49,8 +57,10 @@ export async function listScreens(): Promise<OutputScreen[]> {
         top: window.screenY,
         width: window.screen.width,
         height: window.screen.height,
+        physicalWidth: window.screen.width,
+        physicalHeight: window.screen.height,
         isPrimary: true,
-        scaleFactor: 1,
+        scaleFactor: window.devicePixelRatio || 1,
       },
     ];
   }

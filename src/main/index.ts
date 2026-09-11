@@ -1,8 +1,8 @@
-import { app, BrowserWindow, ipcMain, powerSaveBlocker, shell, Menu } from "electron";
+import { app, BrowserWindow, ipcMain, powerSaveBlocker, session, shell, Menu } from "electron";
 import { existsSync } from "node:fs";
 import { join } from "node:path";
 import { handleMediaProtocol, registerMediaScheme } from "./protocol";
-import { importMediaFiles, pickMediaFiles, ffmpegAvailable } from "./media";
+import { importMediaFiles, pickMediaFiles, ffmpegAvailable, rebuildMediaAssets } from "./media";
 import {
   closeAllOutputs,
   closeOutput,
@@ -52,9 +52,11 @@ function createMainWindow() {
       backgroundThrottling: false,
       nodeIntegration: false,
       webSecurity: false,
+      autoplayPolicy: "no-user-gesture-required",
     },
   });
   mainWindow.webContents.setBackgroundThrottling(false);
+  mainWindow.webContents.setAudioMuted(false);
   mainWindow.on("closed", () => {
     mainWindow = null;
     closeAllOutputs();
@@ -143,6 +145,11 @@ function bindIpc() {
     });
   });
   ipcMain.handle("media:ffmpeg", () => ffmpegAvailable());
+  ipcMain.handle("media:rebuild", async (_e, assets: Parameters<typeof rebuildMediaAssets>[0]) => {
+    return rebuildMediaAssets(assets, (message, level) => {
+      mainWindow?.webContents.send("log", { message, level: level ?? "info" });
+    });
+  });
 
   ipcMain.handle("ndi:discover", async () => {
     try {
@@ -180,6 +187,10 @@ app.commandLine.appendSwitch("disable-backgrounding-occluded-windows");
 
 app.whenReady().then(() => {
   handleMediaProtocol();
+  session.defaultSession.setPermissionRequestHandler((_wc, permission, callback) => {
+    callback(permission === "media" || permission === "mediaKeySystem" || permission === "display-capture");
+  });
+  session.defaultSession.setPermissionCheckHandler(() => true);
   startSignalServer();
   if (process.platform === "win32") app.setAppUserModelId("com.watchout.producer");
   blocker = powerSaveBlocker.start("prevent-display-sleep");

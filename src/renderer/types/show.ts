@@ -176,6 +176,9 @@ export interface Asset {
   color: string;
   optimized: boolean;
   notes: string;
+  originalPath?: string;
+  proxyPath?: string;
+  proxyVersion?: number;
 }
 
 export interface Display {

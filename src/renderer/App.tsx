@@ -9,6 +9,7 @@ export function App() {
 
   useEffect(() => {
     boot();
+    window.__woLog = (message, level) => useApp.getState().log(message, level);
   }, [boot]);
 
   useEffect(() => {

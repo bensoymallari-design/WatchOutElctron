@@ -20,6 +20,8 @@ import { connectCamera, connectScreen, connectUrl } from "@/lib/liveSources";
 import { downloadShow, loadLayouts, loadRecents, loadShowLocal, saveLayouts, saveShowLocal, type RecentShow } from "@/lib/persistence";
 import { fitTransform, displayForCue, type FitMode } from "@/lib/stageGeometry";
 import { listScreens, openDisplayOutput, preferredOutputScreen } from "@/lib/displayOutput";
+import { PROXY_VERSION } from "../../shared/codecs";
+import { unlockPlaybackAudio } from "@/lib/playbackAudio";
 
 export interface LogEntry {
   id: string;
@@ -75,6 +77,8 @@ interface AppActions {
   save: () => void;
   saveDownload: () => void;
   importDesktopAssets: () => Promise<void>;
+  rebuildStaleMedia: () => Promise<void>;
+  applyMonitorSize: (screenId?: string) => Promise<void>;
   outputAllDisplays: () => Promise<void>;
   quitToWelcome: () => void;
   setShowName: (name: string) => void;
@@ -202,7 +206,7 @@ export const useApp = create<AppState & AppActions>((set, get) => ({
     apply(loadRecents(), loadLayouts({}));
     void window.watchout?.recents().then((recents) => set({ recents }));
     void window.watchout?.ffmpegReady().then((ok) => {
-      if (ok) get().log("ffmpeg ready — HAP / ProRes / H.264 will build VP8+Opus proxies (picture + soundtrack)");
+      if (ok) get().log("ffmpeg ready — HAP / ProRes / H.264 build a VP9+Opus proxy at the file’s real pixels");
       else get().log("ffmpeg not found. Install ffmpeg for extra codec proxies (HAP, ProRes, H.264).", "warn");
     });
     void window.watchout?.gpuInfo().then((info) => {
@@ -287,6 +291,7 @@ export const useApp = create<AppState & AppActions>((set, get) => ({
       dialog: null,
     });
     get().log(`Opened ${show.name}`);
+    void get().rebuildStaleMedia();
   },
 
   openNative: async () => {
@@ -307,6 +312,7 @@ export const useApp = create<AppState & AppActions>((set, get) => ({
       future: [],
     });
     get().log(`Opened ${show.name} from ${opened.path}`);
+    void get().rebuildStaleMedia();
   },
 
   openRecentPath: async (path) => {
@@ -331,6 +337,7 @@ export const useApp = create<AppState & AppActions>((set, get) => ({
         future: [],
       });
       get().log(`Opened ${show.name}`);
+      void get().rebuildStaleMedia();
     } catch (error) {
       get().log(error instanceof Error ? error.message : "Open failed", "error");
     }
@@ -515,6 +522,7 @@ export const useApp = create<AppState & AppActions>((set, get) => ({
     ),
 
   setPlayback: (timelineId, state) => {
+    if (state === "play") unlockPlaybackAudio();
     set((s) =>
       patchShow(
         s,
@@ -746,7 +754,9 @@ export const useApp = create<AppState & AppActions>((set, get) => ({
         channel: display.channel,
         fullscreen: true,
       });
-      s.log(`Output ${display.name} fullscreen on ${screen.label} ${screen.width}×${screen.height}`);
+      s.log(
+        `Output ${display.name} on ${screen.label} · ${screen.physicalWidth || screen.width}×${screen.physicalHeight || screen.height} px`,
+      );
     } catch (error) {
       s.log(error instanceof Error ? error.message : "Output failed", "error");
     }
@@ -1133,6 +1143,66 @@ export const useApp = create<AppState & AppActions>((set, get) => ({
       patchShow(s, (show) => ({ ...show, assets: [...show.assets, ...loaded] })),
     );
     get().log(`Imported ${loaded.length} asset${loaded.length === 1 ? "" : "s"} into Asset Manager`);
+  },
+
+  rebuildStaleMedia: async () => {
+    const show = get().show;
+    if (!show || !window.watchout?.rebuildMedia) return;
+    const stale = show.assets.filter(
+      (a): a is Asset & { originalPath: string; kind: "video" | "audio" } =>
+        (a.kind === "video" || a.kind === "audio") && !!a.originalPath && a.proxyVersion !== PROXY_VERSION,
+    );
+    if (!stale.length) return;
+    get().log(`Rebuilding ${stale.length} media file(s) at native resolution with soundtrack…`);
+    const updated = await window.watchout.rebuildMedia(
+      stale.map((a) => ({
+        id: a.id,
+        name: a.name,
+        kind: a.kind,
+        originalPath: a.originalPath,
+        proxyVersion: a.proxyVersion,
+        width: a.width,
+        height: a.height,
+      })),
+    );
+    if (!updated.length) {
+      get().log("No media could be rebuilt. Import the files again.", "warn");
+      return;
+    }
+    set((s) =>
+      patchShow(
+        s,
+        (cur) => ({
+          ...cur,
+          assets: cur.assets.map((a) => {
+            const next = updated.find((u) => u.id === a.id);
+            return next ? { ...a, ...next, folderId: a.folderId } : a;
+          }),
+        }),
+        false,
+      ),
+    );
+    get().log("HQ playback files ready — 4K stays 4K, soundtrack kept. Save the show to remember them.");
+  },
+
+  applyMonitorSize: async (screenId) => {
+    const show = get().show;
+    if (!show?.displays.length) return;
+    const screens = await listScreens();
+    const screen =
+      (screenId ? screens.find((s) => s.id === screenId) : undefined) ??
+      screens.find((s) => !s.isPrimary) ??
+      screens[0];
+    if (!screen) {
+      get().log("No OS monitor found. Click Find screens.", "warn");
+      return;
+    }
+    const selectedId = get().selection.kind === "display" ? get().selection.ids[0] : undefined;
+    const display = (selectedId ? show.displays.find((d) => d.id === selectedId) : undefined) ?? show.displays[0];
+    const width = screen.physicalWidth || screen.width;
+    const height = screen.physicalHeight || screen.height;
+    get().updateDisplay(display.id, { width, height });
+    get().log(`Display ${display.name} set to ${width}×${height} to match ${screen.label} (${screen.scaleFactor}× DPI)`);
   },
 
   updateAsset: (id, partial) =>

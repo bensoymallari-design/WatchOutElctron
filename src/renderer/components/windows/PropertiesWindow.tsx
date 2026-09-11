@@ -125,7 +125,7 @@ function CueProps({ cue }: { cue: Cue }) {
       <Num label="Rotation Z" value={cue.rotation.z} onChange={(v) => u({ rotation: { ...cue.rotation, z: v } })} />
       <Num label="Opacity" value={cue.opacity} onChange={(v) => u({ opacity: v })} />
       <Num label="Volume" value={cue.volume} onChange={(v) => u({ volume: v })} />
-      <div className="text-[10px] text-stone-500">0–100 · soundtrack plays from the Producer PC on Space</div>
+      <div className="text-[10px] text-stone-500">0–100 · plays on this PC’s speakers when you press Space</div>
       {cue.control && (
         <>
           <Read label="Control" value={`${cue.control.state} → ${cue.control.target}`} />
@@ -173,12 +173,15 @@ function DisplayProps({ display }: { display: Display }) {
         <button className="rounded bg-[#f5a623] px-2 py-1 text-[11px] text-black" onClick={() => void useApp.getState().outputSelectedDisplay()}>
           Output / Fullscreen
         </button>
+        <button className="rounded bg-[#14532d] px-2 py-1 text-[11px] text-emerald-100" onClick={() => void useApp.getState().applyMonitorSize()}>
+          Match TV pixels
+        </button>
         <button className="rounded bg-[#14532d] px-2 py-1 text-[11px] text-emerald-100" onClick={() => useApp.getState().fitSelectedToDisplay("cover")}>
           Snap cue to this display
         </button>
       </div>
       <p className="mt-2 text-[10px] leading-relaxed text-stone-500">
-        HDMI is not a native GPU bind in the browser. Windows must already see the monitor (Win+P → Extend). Output opens a fullscreen window on that screen.
+        Set Width×Height to the TV’s real pixels (Match TV pixels). HDMI must be Extend in Win+P. Sound plays on the TV output; Windows may need that HDMI device as default playback if it is not listed as HDMI audio.
       </p>
     </Panel>
   );

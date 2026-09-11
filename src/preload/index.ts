@@ -1,5 +1,5 @@
 import { contextBridge, ipcRenderer, webUtils } from "electron";
-import type { ClockPayload, ImportedMedia, NdiScan, OpenOutputOptions, OutputScreen, RecentShow } from "../shared/ipc";
+import type { ClockPayload, ImportedMedia, NdiScan, OpenOutputOptions, OutputScreen, RebuildMediaRequest, RecentShow } from "../shared/ipc";
 
 const api = {
   platform: process.platform,
@@ -35,6 +35,8 @@ const api = {
   recents: () => ipcRenderer.invoke("show:recents") as Promise<RecentShow[]>,
   pickMedia: () => ipcRenderer.invoke("media:pick") as Promise<ImportedMedia[]>,
   importPaths: (paths: string[]) => ipcRenderer.invoke("media:importPaths", paths) as Promise<ImportedMedia[]>,
+  rebuildMedia: (assets: RebuildMediaRequest[]) =>
+    ipcRenderer.invoke("media:rebuild", assets) as Promise<ImportedMedia[]>,
   ffmpegReady: () => ipcRenderer.invoke("media:ffmpeg") as Promise<boolean>,
   discoverNdi: () => ipcRenderer.invoke("ndi:discover") as Promise<NdiScan>,
   gpuInfo: () => ipcRenderer.invoke("app:gpu") as Promise<string>,

@@ -23,6 +23,8 @@ export function listScreens(): OutputScreen[] {
     top: d.bounds.y,
     width: d.bounds.width,
     height: d.bounds.height,
+    physicalWidth: Math.round(d.size.width * d.scaleFactor),
+    physicalHeight: Math.round(d.size.height * d.scaleFactor),
     isPrimary: d.id === primary.id,
     scaleFactor: d.scaleFactor,
   }));
@@ -32,6 +34,12 @@ export function preferredScreen(screens: OutputScreen[], channel = 1) {
   const extras = screens.filter((s) => !s.isPrimary);
   const pool = extras.length ? extras : screens;
   return pool[Math.max(0, Math.min(pool.length - 1, channel - 1))] ?? screens[0];
+}
+
+function outputShouldPlayAudio(target: OutputScreen, screens: OutputScreen[]) {
+  const hasTv = screens.some((s) => !s.isPrimary);
+  if (hasTv) return !target.isPrimary;
+  return true;
 }
 
 export function liveOutputIds() {
@@ -98,9 +106,13 @@ export async function openOutput(opts: OpenOutputOptions) {
   win.setMenuBarVisibility(false);
   win.webContents.setBackgroundThrottling(false);
   win.webContents.setFrameRate(60);
-  const url = `${html}?displayId=${encodeURIComponent(opts.displayId)}`;
+  win.webContents.setVisualZoomLevelLimits(1, 1);
+  const playAudio = outputShouldPlayAudio(target, screens);
+  const query: Record<string, string> = { displayId: opts.displayId };
+  if (playAudio) query.audio = "1";
+  const url = `${html}?displayId=${encodeURIComponent(opts.displayId)}${playAudio ? "&audio=1" : ""}`;
   if (html.startsWith("http")) await win.loadURL(url);
-  else await win.loadFile(html, { query: { displayId: opts.displayId } });
+  else await win.loadFile(html, { query });
   win.once("ready-to-show", () => {
     win.setBounds({ x: target.left, y: target.top, width: target.width, height: target.height });
     win.show();

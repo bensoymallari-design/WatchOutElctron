@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { mediaKind, needsPlaybackProxy, proxyFfmpegArgs } from "./codecs";
+import { mediaKind, needsPlaybackProxy, proxyCpuUsed, proxyFfmpegArgs } from "./codecs";
 
 test("classifies common media extensions", () => {
   assert.equal(mediaKind("wall.png"), "image");
@@ -24,11 +24,21 @@ test("wav does not need a proxy", () => {
   assert.equal(needsPlaybackProxy("pcm_s16le", "hit.wav"), false);
 });
 
-test("video proxy keeps the first audio track as Opus", () => {
-  const args = proxyFfmpegArgs("video", "in.mov", "out.webm");
+test("video proxy keeps native pixels, VP9+Opus, and the first audio track", () => {
+  const args = proxyFfmpegArgs("video", "in.mov", "out.webm", { width: 3840, height: 2160 });
   assert.equal(args.includes("-an"), false);
   assert.ok(args.includes("0:a:0?"));
   assert.ok(args.includes("libopus"));
+  assert.ok(args.includes("libvpx-vp9"));
+  assert.ok(args.includes("-crf"));
+  assert.equal(args.includes("realtime"), false);
+  assert.ok(args.includes("scale=trunc(iw/2)*2:trunc(ih/2)*2"));
+});
+
+test("4K proxies use a faster cpu-used than HD, never the old realtime 8", () => {
+  assert.equal(proxyCpuUsed(3840, 2160), 6);
+  assert.equal(proxyCpuUsed(1920, 1080), 5);
+  assert.equal(proxyCpuUsed(1280, 720), 4);
 });
 
 test("audio-only proxy strips picture and encodes Opus", () => {

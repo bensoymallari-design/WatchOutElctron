@@ -1,10 +1,11 @@
 import { spawn } from "node:child_process";
 import { copyFile, mkdir } from "node:fs/promises";
+import { existsSync } from "node:fs";
 import { basename, extname, join } from "node:path";
 import { pathToFileURL } from "node:url";
 import { app, dialog, type BrowserWindow } from "electron";
-import { mediaKind, needsPlaybackProxy, proxyFfmpegArgs, proxyNote } from "../shared/codecs";
-import type { ImportedMedia } from "../shared/ipc";
+import { mediaKind, needsPlaybackProxy, PROXY_VERSION, proxyFfmpegArgs, proxyNote, type ProxyKind } from "../shared/codecs";
+import type { ImportedMedia, RebuildMediaRequest } from "../shared/ipc";
 
 function run(cmd: string, args: string[], onStderr?: (line: string) => void) {
   return new Promise<{ stdout: string; stderr: string; code: number }>((resolve, reject) => {
@@ -47,10 +48,18 @@ interface Probe {
   duration: number;
   fps: number;
   codec: string;
+  hasAudio: boolean;
 }
 
 async function probeFile(filePath: string): Promise<Probe> {
-  const fallback: Probe = { width: 1920, height: 1080, duration: 10000, fps: 60, codec: extname(filePath).slice(1).toUpperCase() || "BIN" };
+  const fallback: Probe = {
+    width: 0,
+    height: 0,
+    duration: 10000,
+    fps: 60,
+    codec: extname(filePath).slice(1).toUpperCase() || "BIN",
+    hasAudio: false,
+  };
   if (!(await ffmpegAvailable())) return fallback;
   const result = await run(ffprobeBin, [
     "-v",
@@ -78,26 +87,38 @@ async function probeFile(filePath: string): Promise<Probe> {
       if (n && d) fps = n / d;
     }
     return {
-      width: video?.width || (audio ? 0 : 1920),
-      height: video?.height || (audio ? 0 : 1080),
+      width: video?.width || 0,
+      height: video?.height || 0,
       duration: Math.max(250, Math.round(durSec * 1000)),
       fps: Number.isFinite(fps) && fps > 1 ? fps : 60,
       codec: [video?.codec_name, audio?.codec_name].filter(Boolean).join(" + ") || fallback.codec,
+      hasAudio: !!audio,
     };
   } catch {
     return fallback;
   }
 }
 
-async function transcodeProxy(src: string, dest: string, kind: "video" | "audio", onProgress?: (msg: string) => void) {
+async function transcodeProxy(
+  src: string,
+  dest: string,
+  kind: "video" | "audio",
+  size: { width: number; height: number },
+  onProgress?: (msg: string) => void,
+) {
   const onChunk = (chunk: string) => {
     const time = chunk.match(/time=(\d+:\d+:\d+\.\d+)/);
     if (time) onProgress?.(`Transcoding ${basename(src)}  ${time[1]}`);
   };
-  let result = await run(ffmpegBin, proxyFfmpegArgs(kind, src, dest), onChunk);
+  const tryKind = async (proxyKind: ProxyKind) => run(ffmpegBin, proxyFfmpegArgs(proxyKind, src, dest, size), onChunk);
+  let result = await tryKind(kind);
   if (result.code !== 0 && kind === "video") {
-    onProgress?.(`Retrying ${basename(src)} without audio`);
-    result = await run(ffmpegBin, proxyFfmpegArgs("video-silent", src, dest), onChunk);
+    onProgress?.(`VP9 failed for ${basename(src)}, trying VP8 with audio`);
+    result = await tryKind("video-vp8");
+  }
+  if (result.code !== 0 && kind === "video") {
+    onProgress?.(`Audio encode failed for ${basename(src)} — picture only`);
+    result = await tryKind("video-silent");
   }
   if (result.code !== 0) throw new Error(result.stderr.slice(-400) || "ffmpeg proxy failed");
 }
@@ -117,6 +138,26 @@ export async function mediaRoot() {
 
 export function mediaUrl(filePath: string) {
   return pathToFileURL(filePath).href;
+}
+
+function proxyDest(root: string, id: string) {
+  return join(root, "proxies", `${id}.v${PROXY_VERSION}.webm`);
+}
+
+async function buildProxy(
+  id: string,
+  destFile: string,
+  kind: "video" | "audio",
+  info: Probe,
+  onLog?: (message: string, level?: "info" | "warn" | "error") => void,
+) {
+  const root = await mediaRoot();
+  const proxy = proxyDest(root, id);
+  const label = `${info.width || "?"}×${info.height || "?"} ${info.codec}`;
+  onLog?.(`Building HQ VP9+Opus ${label} for ${basename(destFile)} — keeps file pixels, may take a few minutes`);
+  await transcodeProxy(destFile, proxy, kind, { width: info.width, height: info.height }, (msg) => onLog?.(msg));
+  onLog?.(`Proxy ready: ${basename(destFile)} (${info.width}×${info.height}${info.hasAudio ? " + audio" : " · no audio track"})`);
+  return proxy;
 }
 
 let assetSeq = 0;
@@ -140,20 +181,21 @@ export async function importMediaFiles(
     let url = mediaUrl(dest);
     let optimized = !needsPlaybackProxy(info.codec, dest);
     let proxyPath: string | undefined;
+    let proxyVersion: number | undefined;
     if (kind !== "image" && needsPlaybackProxy(info.codec, dest) && canFfmpeg) {
-      const proxy = join(root, "proxies", `${id}.webm`);
-      onLog?.(`Building VP8+Opus playback proxy for ${basename(src)} (${info.codec})`);
       try {
-        await transcodeProxy(dest, proxy, kind, (msg) => onLog?.(msg));
-        url = mediaUrl(proxy);
-        proxyPath = proxy;
+        proxyPath = await buildProxy(id, dest, kind, info, onLog);
+        url = mediaUrl(proxyPath);
         optimized = true;
-        onLog?.(`Proxy ready: ${basename(src)}`);
+        proxyVersion = PROXY_VERSION;
       } catch (error) {
         optimized = false;
         onLog?.(error instanceof Error ? error.message : "Proxy transcode failed", "error");
       }
+    } else if (kind !== "image") {
+      proxyVersion = PROXY_VERSION;
     }
+    const silent = kind === "video" && !info.hasAudio;
     out.push({
       id,
       name: basename(src).replace(/\.[^.]+$/, ""),
@@ -166,9 +208,62 @@ export async function importMediaFiles(
       codec: info.codec,
       color: colorFor(kind),
       optimized,
-      notes: `${basename(src)} · ${proxyNote(info.codec, !!proxyPath)}`,
+      notes: `${basename(src)} · ${proxyNote(info.codec, !!proxyPath, info.width, info.height)}${silent ? " · no audio track" : ""}`,
       originalPath: dest,
       proxyPath,
+      proxyVersion,
+    });
+  }
+  return out;
+}
+
+export async function rebuildMediaAssets(
+  assets: RebuildMediaRequest[],
+  onLog?: (message: string, level?: "info" | "warn" | "error") => void,
+): Promise<ImportedMedia[]> {
+  const canFfmpeg = await ffmpegAvailable();
+  const out: ImportedMedia[] = [];
+  for (const asset of assets) {
+    if (asset.kind !== "video" && asset.kind !== "audio") continue;
+    if (!asset.originalPath || !existsSync(asset.originalPath)) continue;
+    if (asset.proxyVersion === PROXY_VERSION) continue;
+    const info = await probeFile(asset.originalPath);
+    const kind = asset.kind;
+    let url = mediaUrl(asset.originalPath);
+    let proxyPath: string | undefined;
+    let optimized = !needsPlaybackProxy(info.codec, asset.originalPath);
+    let proxyVersion = PROXY_VERSION;
+    if (needsPlaybackProxy(info.codec, asset.originalPath)) {
+      if (!canFfmpeg) {
+        onLog?.(`Cannot rebuild ${asset.name} — ffmpeg not found`, "warn");
+        continue;
+      }
+      try {
+        proxyPath = await buildProxy(asset.id, asset.originalPath, kind, info, onLog);
+        url = mediaUrl(proxyPath);
+        optimized = true;
+      } catch (error) {
+        onLog?.(error instanceof Error ? error.message : "Proxy rebuild failed", "error");
+        continue;
+      }
+    }
+    const silent = kind === "video" && !info.hasAudio;
+    out.push({
+      id: asset.id,
+      name: asset.name,
+      kind,
+      width: info.width || asset.width || 0,
+      height: info.height || asset.height || 0,
+      duration: info.duration,
+      fps: info.fps,
+      url,
+      codec: info.codec,
+      color: colorFor(kind),
+      optimized,
+      notes: `${basename(asset.originalPath)} · ${proxyNote(info.codec, !!proxyPath, info.width, info.height)}${silent ? " · no audio track" : ""}`,
+      originalPath: asset.originalPath,
+      proxyPath,
+      proxyVersion,
     });
   }
   return out;
