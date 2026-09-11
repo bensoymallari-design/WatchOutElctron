@@ -53,9 +53,9 @@ npm run dist:win
 
 The installer is:
 
-`release/WATCHOUT-Producer-Setup-7.8.2.exe`
+`release/WATCHOUT-Producer-Setup-7.8.3.exe`
 
-Double-click it. It adds **WATCHOUT Producer** to the Start Menu and desktop. That `.exe` is what you copy to other PCs. The splash screen must say **PRODUCER 7.8.2**.
+Double-click it. It adds **WATCHOUT Producer** to the Start Menu and desktop. That `.exe` is what you copy to other PCs. The splash screen must say **PRODUCER 7.8.3**.
 
 If `electron` is missing after install (the `install scripts not yet covered by allowScripts` warning), run the three `approve` commands, then `npm install` again, then `npm run dist:win`.
 
@@ -81,7 +81,7 @@ Installers land in `release/`. Windows builds an NSIS setup; they are unsigned, 
 1. New Show or Demo Show (3-wide LED wall).
 2. **Assets → Import** — images, video, audio. Unsupported codecs get a VP9+Opus WebM proxy at the file’s real resolution (4K stays 4K, soundtrack kept). First import of a 4K clip can take a few minutes.
 3. Drag assets onto **Stage** (snaps 1:1 to a display) or **Timeline**. Audio-only files go on the timeline; they play even with no picture.
-4. Win+P → **Extend**. **Devices → Find screens → Assign screens** creates one Display per extra controller (not the laptop). On each Display row pick that monitor. Select a Display, then **Output** / **Output here**, or **Output all**. The same **Monitor** list is on the Display in Properties.
+4. Win+P → **Extend**. **Devices → Find screens → Assign screens** creates one Display per extra controller (not the laptop). On the Stage, drag a Display — it snaps flush to neighbors and the origin (Edit → Snap). Then **Output** / **Output here**, or **Output all**. The same **Monitor** list is on the Display in Properties.
 5. **Devices → Audio**: pick **Speakers (Realtek)** (not HDMI/TV) → **Test beep**. Click the Stage, press **Space**. Cue **Volume** in Properties is 0–100.
 6. Space play/pause, Esc stop. File → Save writes `.watch.json`.
 

@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { displayForCue, fitTransform, hitDisplay, snapRect, snapValue } from "./stageGeometry";
+import { displayForCue, displayMoveGuides, fitTransform, hitDisplay, snapRect, snapValue } from "./stageGeometry";
 
 const display = { id: "d1", name: "Display 1", x: 0, y: 0, z: 0, width: 1920, height: 1080, rotation: 0, outputType: "GPU" as const, channel: 1, nodeId: "local", enabled: true, blend: false, blendWidth: 128, virtual: false };
 
@@ -46,4 +46,13 @@ test("hitDisplay prefers the topmost display", () => {
 test("displayForCue uses the display under the cue origin", () => {
   const right = { ...display, id: "right", x: 1920 };
   assert.equal(displayForCue([display, right], { position: { x: 1920, y: 0, z: 0 } }).id, "right");
+});
+
+test("dragging a display snaps flush to its neighbor and to the origin", () => {
+  const left = { ...display, id: "left", x: 0, y: 0, width: 1920, height: 1080 };
+  const moving = { ...display, id: "right", x: 1908, y: 6, width: 1920, height: 1080 };
+  const guides = displayMoveGuides([left, moving], moving.id);
+  const snapped = snapRect({ x: moving.x, y: moving.y, w: moving.width, h: moving.height }, guides.x, guides.y, 16);
+  assert.equal(snapped.x, 1920);
+  assert.equal(snapped.y, 0);
 });

@@ -128,7 +128,7 @@ interface AppActions {
   updateTweenPoint: (cueId: string, tweenId: string, pointId: string, partial: { time?: number; value?: number }) => void;
   addDisplay: (partial?: Partial<Display>) => void;
   addDisplayGrid: (cols: number, rows: number, w: number, h: number, gap: number) => void;
-  updateDisplay: (id: string, partial: Partial<Display>) => void;
+  updateDisplay: (id: string, partial: Partial<Display>, record?: boolean) => void;
   importAssets: (files: File[]) => Promise<void>;
   updateAsset: (id: string, partial: Partial<Asset>) => void;
   deleteAsset: (id: string) => void;
@@ -1082,12 +1082,16 @@ export const useApp = create<AppState & AppActions>((set, get) => ({
       }),
     ),
 
-  updateDisplay: (id, partial) =>
+  updateDisplay: (id, partial, record = true) =>
     set((s) =>
-      patchShow(s, (show) => ({
-        ...show,
-        displays: show.displays.map((d) => (d.id === id ? { ...d, ...partial } : d)),
-      })),
+      patchShow(
+        s,
+        (show) => ({
+          ...show,
+          displays: show.displays.map((d) => (d.id === id ? { ...d, ...partial } : d)),
+        }),
+        record,
+      ),
     ),
 
   importDesktopAssets: async () => {

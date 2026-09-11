@@ -79,8 +79,8 @@ function roundHundredths(n: number) {
   return Math.round(n * 100) / 100;
 }
 
-export function snapValue(value: number, guides: number[], threshold: number) {
-  let best = value;
+export function nearestGuide(value: number, guides: number[], threshold: number) {
+  let best: number | undefined;
   let dist = threshold;
   for (const g of guides) {
     const d = Math.abs(value - g);
@@ -89,21 +89,26 @@ export function snapValue(value: number, guides: number[], threshold: number) {
       best = g;
     }
   }
-  return best;
+  return best === undefined ? undefined : { value: best, dist };
+}
+
+export function snapValue(value: number, guides: number[], threshold: number) {
+  return nearestGuide(value, guides, threshold)?.value ?? value;
 }
 
 export function snapRect(rect: StageRect, guidesX: number[], guidesY: number[], threshold: number): StageRect {
-  const left = snapValue(rect.x, guidesX, threshold);
-  const right = snapValue(rect.x + rect.w, guidesX, threshold);
-  const top = snapValue(rect.y, guidesY, threshold);
-  const bottom = snapValue(rect.y + rect.h, guidesY, threshold);
-  const dLeft = Math.abs(left - rect.x);
-  const dRight = Math.abs(right - (rect.x + rect.w));
-  const dTop = Math.abs(top - rect.y);
-  const dBottom = Math.abs(bottom - (rect.y + rect.h));
-  const x = dLeft <= dRight ? left : right - rect.w;
-  const y = dTop <= dBottom ? top : bottom - rect.h;
+  const x = snapAxis(rect.x, rect.w, guidesX, threshold);
+  const y = snapAxis(rect.y, rect.h, guidesY, threshold);
   return { ...rect, x: Math.round(x), y: Math.round(y) };
+}
+
+function snapAxis(pos: number, size: number, guides: number[], threshold: number) {
+  const start = nearestGuide(pos, guides, threshold);
+  const end = nearestGuide(pos + size, guides, threshold);
+  if (start && end) return start.dist <= end.dist ? start.value : end.value - size;
+  if (start) return start.value;
+  if (end) return end.value - size;
+  return pos;
 }
 
 export function displayGuides(displays: Display[]) {
@@ -113,6 +118,18 @@ export function displayGuides(displays: Display[]) {
     if (!d.enabled) continue;
     x.push(d.x, d.x + d.width);
     y.push(d.y, d.y + d.height);
+  }
+  return { x, y };
+}
+
+/** Edges, centers, and stage origin — used when dragging a display. */
+export function displayMoveGuides(displays: Display[], skipId?: string) {
+  const others = displays.filter((d) => d.enabled && d.id !== skipId);
+  const x = [0];
+  const y = [0];
+  for (const d of others) {
+    x.push(d.x, d.x + d.width, d.x + d.width / 2);
+    y.push(d.y, d.y + d.height, d.y + d.height / 2);
   }
   return { x, y };
 }
