@@ -36,13 +36,45 @@ choco install ffmpeg
 
 Without ffmpeg, stills and WebM still play. MOV/MP4/HAP/ProRes import copies the file and logs that a proxy could not be built.
 
-## Package
+## Windows installer (.exe)
+
+From Git Bash or PowerShell, in this repo:
 
 ```bash
-npm run dist
+# 1. Allow Electron to download its binary (required on npm 11+/12)
+npm install-scripts approve electron
+npm install-scripts approve esbuild
+npm install-scripts approve electron-winstaller
+npm install
+
+# 2. Build the NSIS setup.exe
+npm run dist:win
 ```
 
-Produces platform installers under `release/` (NSIS / DMG / AppImage).
+The installer is:
+
+`release/WATCHOUT-Producer-Setup-7.8.0.exe`
+
+Double-click it. It adds **WATCHOUT Producer** to the Start Menu and desktop. That `.exe` is what you copy to other PCs.
+
+If `electron` is missing after install (the `install scripts not yet covered by allowScripts` warning), run the three `approve` commands, then `npm install` again, then `npm run dist:win`.
+
+Use the app branch if `main` is still empty:
+
+```bash
+git fetch origin
+git checkout cursor/watchout-desktop-electron-1bfc
+```
+
+## Other platforms
+
+```bash
+npm run dist        # installer for the OS you are on
+npm run dist:mac    # .dmg
+npm run dist:linux  # AppImage
+```
+
+Installers land in `release/`. Windows builds an NSIS setup; they are unsigned, so SmartScreen may warn once.
 
 ## Workflow
 
