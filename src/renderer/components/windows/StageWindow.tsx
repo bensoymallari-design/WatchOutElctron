@@ -6,6 +6,7 @@ import { collectStageCues, cueRects } from "@/lib/stageCues";
 import {
   cueRect,
   displayGuides,
+  displayMoveGuides,
   hitCue,
   hitDisplay,
   snapRect,
@@ -110,7 +111,7 @@ export function StageWindow() {
           </span>
         </button>
         <span className="ml-2">Stage px  ·  zoom {(camera.zoom * 100).toFixed(0)}%</span>
-        <span className="ml-auto text-stone-500">Drop asset on a display to snap 1:1 · drag cue to snap edges</span>
+        <span className="ml-auto text-stone-500">Drag a display to snap edges · drop asset on a display · Edit→Snap</span>
         <span>
           {show.displays.length} displays  ·  {show.displays.reduce((n, d) => n + d.width, 0)}×
           {Math.max(...show.displays.map((d) => d.height), 0)}
@@ -118,7 +119,7 @@ export function StageWindow() {
       </div>
       <canvas
         ref={canvasRef}
-        className="block h-full w-full touch-none"
+        className="block h-full w-full touch-none cursor-grab active:cursor-grabbing"
         onPointerDown={(e) => {
           const canvas = canvasRef.current;
           if (!canvas) return;
@@ -127,6 +128,29 @@ export function StageWindow() {
           const pt = screenToStage(canvas, cam, e.clientX, e.clientY);
           const current = state.show;
           if (!current) return;
+
+          const pan = () => {
+            const origin = { x: e.clientX, y: e.clientY, cx: cam.x, cy: cam.y };
+            const move = (ev: PointerEvent) => {
+              const dx = (ev.clientX - origin.x) / cam.zoom;
+              const dy = (ev.clientY - origin.y) / cam.zoom;
+              useApp.getState().setCamera({ x: origin.cx - dx, y: origin.cy - dy });
+            };
+            const up = () => {
+              window.removeEventListener("pointermove", move);
+              window.removeEventListener("pointerup", up);
+            };
+            window.addEventListener("pointermove", move);
+            window.addEventListener("pointerup", up);
+          };
+
+          if (e.button === 1) {
+            e.preventDefault();
+            pan();
+            return;
+          }
+          if (e.button !== 0) return;
+
           const cues = collectStageCues(current);
           const media = e.altKey ? undefined : hitCue(cues, current.assets, pt);
           if (media) {
@@ -178,21 +202,46 @@ export function StageWindow() {
           if (hitD) {
             state.select({ kind: "display", ids: [hitD.id] });
             state.focusWindow("properties");
-          } else {
-            state.clearSelection();
+            const origin = { x: e.clientX, y: e.clientY, px: hitD.x, py: hitD.y };
+            let dragged = false;
+            const move = (ev: PointerEvent) => {
+              const live = useApp.getState();
+              const show = live.show;
+              if (!show) return;
+              const dx = (ev.clientX - origin.x) / cam.zoom;
+              const dy = (ev.clientY - origin.y) / cam.zoom;
+              if (!dragged && Math.hypot(ev.clientX - origin.x, ev.clientY - origin.y) < 4) return;
+              dragged = true;
+              let x = origin.px + (ev.shiftKey && Math.abs(dx) < Math.abs(dy) ? 0 : dx);
+              let y = origin.py + (ev.shiftKey && Math.abs(dy) < Math.abs(dx) ? 0 : dy);
+              if (live.snap) {
+                const guides = displayMoveGuides(show.displays, hitD.id);
+                const snapped = snapRect(
+                  { x, y, w: hitD.width, h: hitD.height },
+                  guides.x,
+                  guides.y,
+                  snapThreshold(cam.zoom),
+                );
+                x = snapped.x;
+                y = snapped.y;
+                snapGuidesRef.current = {
+                  x: [snapped.x, snapped.x + hitD.width],
+                  y: [snapped.y, snapped.y + hitD.height],
+                };
+              }
+              live.updateDisplay(hitD.id, { x: Math.round(x), y: Math.round(y) }, false);
+            };
+            const up = () => {
+              snapGuidesRef.current = undefined;
+              window.removeEventListener("pointermove", move);
+              window.removeEventListener("pointerup", up);
+            };
+            window.addEventListener("pointermove", move);
+            window.addEventListener("pointerup", up);
+            return;
           }
-          const origin = { x: e.clientX, y: e.clientY, cx: cam.x, cy: cam.y };
-          const move = (ev: PointerEvent) => {
-            const dx = (ev.clientX - origin.x) / cam.zoom;
-            const dy = (ev.clientY - origin.y) / cam.zoom;
-            useApp.getState().setCamera({ x: origin.cx - dx, y: origin.cy - dy });
-          };
-          const up = () => {
-            window.removeEventListener("pointermove", move);
-            window.removeEventListener("pointerup", up);
-          };
-          window.addEventListener("pointermove", move);
-          window.addEventListener("pointerup", up);
+          state.clearSelection();
+          pan();
         }}
         onDragOver={(e) => {
           e.preventDefault();
