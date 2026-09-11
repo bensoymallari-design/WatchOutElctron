@@ -5,6 +5,8 @@ import { TWEEN_META } from "@/lib/tweens";
 import { cueHasConflict } from "@/lib/timeline";
 import { EASING_OPTIONS } from "@/lib/easing";
 import type { Cue, Display, Easing } from "@/types/show";
+import { listScreens, type OutputScreen } from "@/lib/displayOutput";
+import { useEffect, useState } from "react";
 
 export function PropertiesWindow() {
   const show = useApp((s) => s.show);
@@ -166,6 +168,7 @@ function DisplayProps({ display }: { display: Display }) {
         </select>
       </label>
       <Num label="Channel" value={display.channel} onChange={(v) => u({ channel: v })} />
+      <MonitorField display={display} />
       <Check label="Enabled" checked={display.enabled} onChange={(v) => u({ enabled: v })} />
       <Check label="Soft-edge blend" checked={display.blend} onChange={(v) => u({ blend: v })} />
       <Num label="Blend width" value={display.blendWidth} onChange={(v) => u({ blendWidth: v })} />
@@ -181,9 +184,33 @@ function DisplayProps({ display }: { display: Display }) {
         </button>
       </div>
       <p className="mt-2 text-[10px] leading-relaxed text-stone-500">
-        Set Width×Height to the TV’s real pixels (Match TV pixels). HDMI must be Extend in Win+P. Sound plays on the TV output; Windows may need that HDMI device as default playback if it is not listed as HDMI audio.
+        Set Width×Height to the TV’s real pixels (Match TV pixels). Pick a controller/monitor here or in Devices. HDMI must be Extend in Win+P. Sound: Devices → pick Speakers, Test beep, then play.
       </p>
     </Panel>
+  );
+}
+
+function MonitorField({ display }: { display: Display }) {
+  const [screens, setScreens] = useState<OutputScreen[]>([]);
+  useEffect(() => {
+    void listScreens().then(setScreens);
+  }, []);
+  return (
+    <label className="grid grid-cols-[92px_1fr] items-center gap-2 py-0.5">
+      <span className="text-stone-500">Monitor</span>
+      <select
+        value={display.screenId ?? ""}
+        onChange={(e) => useApp.getState().updateDisplay(display.id, { screenId: e.target.value || undefined })}
+      >
+        <option value="">Auto (channel {display.channel})</option>
+        {screens.map((s) => (
+          <option key={s.id} value={s.id}>
+            {s.label}
+            {s.isPrimary ? " · laptop" : ""} {s.physicalWidth || s.width}×{s.physicalHeight || s.height}
+          </option>
+        ))}
+      </select>
+    </label>
   );
 }
 

@@ -9,11 +9,15 @@ import {
   subscribeOutputs,
   type OutputScreen,
 } from "@/lib/displayOutput";
+import { listSpeakers, playTestTone, saveSinkId, savedSinkId, type SpeakerOption } from "@/lib/audioOut";
+import { unlockPlaybackAudio } from "@/lib/playbackAudio";
 
 export function DevicesWindow() {
   const show = useApp((s) => s.show);
   const [screens, setScreens] = useState<OutputScreen[]>([]);
   const [screenNote, setScreenNote] = useState("Native OS monitors. Output opens a fullscreen Runner window on that screen.");
+  const [speakers, setSpeakers] = useState<SpeakerOption[]>([]);
+  const [sinkId, setSinkId] = useState(savedSinkId());
   const [liveTick, setLiveTick] = useState(0);
 
   useEffect(() => subscribeOutputs(() => setLiveTick((n) => n + 1)), []);
@@ -23,10 +27,11 @@ export function DevicesWindow() {
       const extras = list.filter((s) => !s.isPrimary);
       setScreenNote(
         extras.length
-          ? "Extra monitor found. Output opens fullscreen on that display — no browser popup."
-          : "Only one OS screen detected. Extend HDMI (Win+P / macOS Arrangement), then Find screens.",
+          ? `${extras.length} extra screen(s). Assign each Display to a controller, then Output all.`
+          : "Only one OS screen detected. Extend HDMI (Win+P), then Find screens.",
       );
     });
+    void listSpeakers().then(setSpeakers);
   }, []);
   void liveTick;
 
@@ -36,6 +41,24 @@ export function DevicesWindow() {
     <div className="h-full overflow-auto bg-[#171717] text-[12px]">
       <Section title="Displays">
         <div className="flex items-center justify-end gap-2 border-b border-[#222] px-3 py-1.5">
+          <button
+            className="rounded bg-[#14532d] px-2 py-0.5 text-[11px] text-emerald-100"
+            onClick={() => {
+              void (async () => {
+                const list = await listScreens();
+                setScreens(list);
+                const extras = list.filter((s) => !s.isPrimary);
+                setScreenNote(
+                  extras.length
+                    ? `${extras.length} extra screen(s). Assign each Display to a controller, then Output all.`
+                    : "Only one OS screen detected. Extend HDMI (Win+P), then Find screens.",
+                );
+                await useApp.getState().mapScreensToDisplays(false);
+              })();
+            }}
+          >
+            Assign screens
+          </button>
           <button
             className="rounded bg-[#f5a623] px-2 py-0.5 text-[11px] text-black"
             onClick={() => void useApp.getState().outputAllDisplays()}
@@ -49,14 +72,27 @@ export function DevicesWindow() {
         {show.displays.map((d) => {
           const live = isOutputLive(d.id);
           return (
-            <div key={d.id} className="flex items-center justify-between gap-2 border-b border-[#222] px-3 py-1.5">
+            <div key={d.id} className="flex flex-wrap items-center justify-between gap-2 border-b border-[#222] px-3 py-1.5">
               <button className="min-w-0 flex-1 text-left hover:text-[#f5a623]" onClick={() => useApp.getState().select({ kind: "display", ids: [d.id] })}>
                 <span>{d.name}</span>
                 <span className="ml-2 text-stone-500">
-                  {d.outputType}:{d.channel} · {d.width}×{d.height}
+                  {d.width}×{d.height}
                 </span>
                 {live && <span className="ml-2 text-emerald-400">LIVE</span>}
               </button>
+              <select
+                className="max-w-[180px] rounded bg-[#111] px-1 py-0.5 text-[11px]"
+                value={d.screenId ?? ""}
+                onChange={(e) => useApp.getState().updateDisplay(d.id, { screenId: e.target.value || undefined })}
+              >
+                <option value="">Auto (channel {d.channel})</option>
+                {screens.map((s) => (
+                  <option key={s.id} value={s.id}>
+                    {s.label}
+                    {s.isPrimary ? " · laptop" : ""} {s.physicalWidth || s.width}×{s.physicalHeight || s.height}
+                  </option>
+                ))}
+              </select>
               {live ? (
                 <button className="rounded bg-[#333] px-2 py-0.5 text-[11px]" onClick={() => closeDisplayOutput(d.id)}>
                   Stop
@@ -114,7 +150,10 @@ export function DevicesWindow() {
               <button
                 className="rounded bg-[#14532d] px-2 py-0.5 text-[11px] text-emerald-100"
                 onClick={() => {
-                  const display = show.displays[0];
+                  const selected = useApp.getState().selection;
+                  const display =
+                    (selected.kind === "display" ? show.displays.find((d) => d.id === selected.ids[0]) : undefined) ??
+                    show.displays[0];
                   if (display) useApp.getState().select({ kind: "display", ids: [display.id] });
                   void useApp.getState().applyMonitorSize(s.id);
                 }}
@@ -122,26 +161,62 @@ export function DevicesWindow() {
                 Use size
               </button>
               <button
-              className="shrink-0 rounded bg-[#333] px-2 py-0.5 text-[11px]"
-              onClick={() => {
-                const display = show.displays[0];
-                if (!display) return;
-                void openDisplayOutput(display.id, s, { name: display.name, channel: display.channel, fullscreen: true }).then(() => {
-                  useApp.getState().log(`Output ${display.name} fullscreen → ${s.label}`);
-                });
-              }}
-            >
-              Output here
-            </button>
+                className="shrink-0 rounded bg-[#333] px-2 py-0.5 text-[11px]"
+                onClick={() => {
+                  const selected = useApp.getState().selection;
+                  const display =
+                    (selected.kind === "display" ? show.displays.find((d) => d.id === selected.ids[0]) : undefined) ??
+                    show.displays[0];
+                  if (!display) return;
+                  useApp.getState().updateDisplay(display.id, { screenId: s.id });
+                  void openDisplayOutput(display.id, s, { name: display.name, channel: display.channel, fullscreen: true }).then(
+                    () => {
+                      useApp.getState().log(`Output ${display.name} → ${s.label}`);
+                    },
+                  );
+                }}
+              >
+                Output here
+              </button>
             </span>
           </div>
         ))}
         <p className="px-3 py-2 text-[10px] leading-relaxed text-stone-500">{screenNote}</p>
         <p className="px-3 pb-2 text-[10px] leading-relaxed text-stone-500">
-          Use size copies the monitor’s real pixels onto the selected WATCHOUT display (4K TV → 3840×2160). Then Import video and Rebuild HQ so playback stays sharp and keeps audio.
+          You have several controllers / TVs: click <b>Assign screens</b>, then on each Display row pick which monitor it uses. Select a Display first, then Output here to send that one to that screen.
         </p>
       </Section>
       <Section title="Audio">
+        <div className="flex flex-wrap items-center gap-2 border-b border-[#222] px-3 py-1.5">
+          <select
+            className="min-w-0 flex-1 rounded bg-[#111] px-1 py-0.5 text-[11px]"
+            value={sinkId}
+            onChange={(e) => {
+              setSinkId(e.target.value);
+              saveSinkId(e.target.value);
+              unlockPlaybackAudio();
+              useApp.getState().log(e.target.value ? "Speaker set — click Test beep, then Space" : "Using Windows default speaker");
+            }}
+          >
+            <option value="">Windows default speaker</option>
+            {speakers.map((sp) => (
+              <option key={sp.id} value={sp.id}>
+                {sp.label}
+              </option>
+            ))}
+          </select>
+          <button
+            className="rounded bg-[#f5a623] px-2 py-0.5 text-[11px] text-black"
+            onClick={() => {
+              unlockPlaybackAudio();
+              void playTestTone()
+                .then(() => useApp.getState().log("Test beep sent to the selected speaker"))
+                .catch(() => useApp.getState().log("Test beep failed — check Windows volume and default playback device", "warn"));
+            }}
+          >
+            Test beep
+          </button>
+        </div>
         {show.audioDevices.map((d) => (
           <div key={d.id} className="flex justify-between border-b border-[#222] px-3 py-1.5">
             <span>{d.name}</span>
@@ -150,6 +225,9 @@ export function DevicesWindow() {
             </span>
           </div>
         ))}
+        <p className="px-3 py-2 text-[10px] leading-relaxed text-stone-500">
+          If Test beep is silent, pick Speakers (Realtek) instead of HDMI/TV, and unmute Windows. If the beep works but the video is silent, Assets → Rebuild HQ (needs ffmpeg so Electron gets Opus audio).
+        </p>
       </Section>
       <Section title="Capture">
         {show.captureDevices.map((d) => (
