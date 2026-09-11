@@ -56,6 +56,7 @@ function createMainWindow() {
     },
   });
   mainWindow.webContents.setBackgroundThrottling(false);
+  mainWindow.webContents.setAudioMuted(false);
   mainWindow.on("closed", () => {
     mainWindow = null;
     closeAllOutputs();

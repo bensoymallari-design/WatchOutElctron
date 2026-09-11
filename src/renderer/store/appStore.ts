@@ -21,6 +21,7 @@ import { downloadShow, loadLayouts, loadRecents, loadShowLocal, saveLayouts, sav
 import { fitTransform, displayForCue, type FitMode } from "@/lib/stageGeometry";
 import { listScreens, openDisplayOutput, preferredOutputScreen } from "@/lib/displayOutput";
 import { PROXY_VERSION } from "../../shared/codecs";
+import { unlockPlaybackAudio } from "@/lib/playbackAudio";
 
 export interface LogEntry {
   id: string;
@@ -521,6 +522,7 @@ export const useApp = create<AppState & AppActions>((set, get) => ({
     ),
 
   setPlayback: (timelineId, state) => {
+    if (state === "play") unlockPlaybackAudio();
     set((s) =>
       patchShow(
         s,

@@ -1,7 +1,6 @@
 import { useEffect, useRef } from "react";
 import { useApp } from "@/store/appStore";
 import { stopPlaybackAudio, syncPlaybackAudio } from "@/lib/playbackAudio";
-import { subscribeOutputs } from "@/lib/displayOutput";
 
 export function PlaybackClock() {
   const setFpsNow = useApp((s) => s.setFpsNow);
@@ -10,10 +9,6 @@ export function PlaybackClock() {
   const last = useRef(0);
   const lastGen = useRef(-1);
   const lastShowId = useRef<string>("");
-
-  useEffect(() => {
-    return subscribeOutputs(() => undefined);
-  }, []);
 
   useEffect(() => {
     const step = (now: number) => {

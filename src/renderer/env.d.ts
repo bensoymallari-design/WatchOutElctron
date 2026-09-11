@@ -5,6 +5,7 @@ import type { WatchoutAPI } from "../preload/index";
 declare global {
   interface Window {
     watchout: WatchoutAPI;
+    __woLog?: (message: string, level?: "info" | "warn" | "error") => void;
   }
 }
 

@@ -18,6 +18,7 @@ import {
 import { TimelineWindow } from "@/components/windows/TimelineWindow";
 import { TimelinesWindow } from "@/components/windows/TimelinesWindow";
 import { useApp } from "@/store/appStore";
+import { unlockPlaybackAudio } from "@/lib/playbackAudio";
 import { useEffect } from "react";
 
 export function Producer() {
@@ -39,7 +40,10 @@ export function Producer() {
   }, []);
 
   return (
-    <div className="flex h-screen w-screen flex-col overflow-hidden bg-[#0e0e0e]">
+    <div
+      className="flex h-screen w-screen flex-col overflow-hidden bg-[#0e0e0e]"
+      onPointerDown={() => unlockPlaybackAudio()}
+    >
       <MenuBar />
       <div
         id="wo-workspace"

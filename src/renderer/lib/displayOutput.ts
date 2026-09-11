@@ -15,13 +15,17 @@ function api() {
 
 export function subscribeOutputs(fn: () => void) {
   listeners.add(fn);
+  let gen = 0;
   const off = api()?.onOutputsChanged((ids) => {
+    gen += 1;
     live = new Set(ids);
     emit();
   });
+  const started = gen;
   void api()
     ?.liveOutputs()
     .then((ids) => {
+      if (gen !== started) return;
       live = new Set(ids);
       emit();
     });

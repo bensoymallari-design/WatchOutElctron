@@ -125,7 +125,7 @@ function CueProps({ cue }: { cue: Cue }) {
       <Num label="Rotation Z" value={cue.rotation.z} onChange={(v) => u({ rotation: { ...cue.rotation, z: v } })} />
       <Num label="Opacity" value={cue.opacity} onChange={(v) => u({ opacity: v })} />
       <Num label="Volume" value={cue.volume} onChange={(v) => u({ volume: v })} />
-      <div className="text-[10px] text-stone-500">0–100 · soundtrack plays from the Producer PC on Space</div>
+      <div className="text-[10px] text-stone-500">0–100 · plays on this PC’s speakers when you press Space</div>
       {cue.control && (
         <>
           <Read label="Control" value={`${cue.control.state} → ${cue.control.target}`} />
