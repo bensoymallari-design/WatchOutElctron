@@ -5,7 +5,8 @@ import { EFFECT_TOGGLES, TWEEN_META } from "@/lib/tweens";
 import { formatTimecode } from "@/lib/time";
 import type { WindowId } from "@/types/show";
 import { Activity, Bell, Database, Globe } from "lucide-react";
-import { useRef } from "react";
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 
 const MENUS = ["file", "edit", "stage", "timeline", "effect", "window", "help"] as const;
 
@@ -21,32 +22,39 @@ export function MenuBar() {
   const fileRef = useRef<HTMLInputElement>(null);
   const openFile = useApp((s) => s.openFile);
 
+  useEffect(() => {
+    if (!menu && !messagesOpen) return;
+    const onDown = (e: PointerEvent) => {
+      const t = e.target as HTMLElement;
+      if (t.closest("[data-wo-menu]")) return;
+      setMenu(null);
+      if (messagesOpen && !t.closest("[data-wo-messages]")) useApp.getState().toggleMessages();
+    };
+    window.addEventListener("pointerdown", onDown, true);
+    return () => window.removeEventListener("pointerdown", onDown, true);
+  }, [menu, messagesOpen, setMenu]);
+
   return (
-    <div className="relative z-50 flex h-8 shrink-0 items-center border-b border-black bg-[#2a2a2a] px-1 text-[12px]">
+    <div className="relative z-[1000] flex h-8 shrink-0 items-center overflow-visible border-b border-black bg-[#2a2a2a] px-1 text-[12px]" data-wo-menu>
       <div className="mr-3 px-2 text-[11px] font-black tracking-[0.28em] text-[#f5a623]">WATCHOUT</div>
       {MENUS.map((name) => (
-        <div key={name} className="relative">
-          <button
-            className={`px-2.5 py-1 capitalize ${menu === name ? "bg-[#f5a623] text-black" : "hover:bg-white/10"}`}
-            onClick={() => setMenu(menu === name ? null : name)}
-            onMouseEnter={() => {
-              if (menu) setMenu(name);
-            }}
-          >
-            {name}
-          </button>
-          {menu === name && (
-            <div className="absolute left-0 top-full min-w-[260px] border border-[#111] bg-[#1f1f1f] py-1 shadow-2xl">
-              {name === "file" && <FileMenu fileRef={fileRef} />}
-              {name === "edit" && <EditMenu />}
-              {name === "stage" && <StageMenu />}
-              {name === "timeline" && <TimelineMenu />}
-              {name === "effect" && <EffectMenu />}
-              {name === "window" && <WindowMenu />}
-              {name === "help" && <HelpMenu />}
-            </div>
-          )}
-        </div>
+        <MenuSlot
+          key={name}
+          name={name}
+          open={menu === name}
+          onToggle={() => setMenu(menu === name ? null : name)}
+          onHover={() => {
+            if (menu) setMenu(name);
+          }}
+        >
+          {name === "file" && <FileMenu fileRef={fileRef} />}
+          {name === "edit" && <EditMenu />}
+          {name === "stage" && <StageMenu />}
+          {name === "timeline" && <TimelineMenu />}
+          {name === "effect" && <EffectMenu />}
+          {name === "window" && <WindowMenu />}
+          {name === "help" && <HelpMenu />}
+        </MenuSlot>
       ))}
       <div className="ml-auto flex items-center gap-3 pr-2 text-[11px] text-stone-400">
         <span>{Math.round(fpsNow)} fps</span>
@@ -66,7 +74,7 @@ export function MenuBar() {
         </button>
       </div>
       {messagesOpen && (
-        <div className="absolute right-2 top-8 z-50 w-96 max-h-72 overflow-auto border border-[#111] bg-[#1a1a1a] p-2 shadow-2xl">
+        <div data-wo-messages className="absolute right-2 top-8 z-[10000] w-96 max-h-72 overflow-auto border border-[#111] bg-[#1a1a1a] p-2 shadow-2xl">
           {logs.length === 0 ? (
             <div className="p-3 text-stone-500">No messages</div>
           ) : (
@@ -95,6 +103,68 @@ export function MenuBar() {
   );
 }
 
+function MenuSlot({
+  name,
+  open,
+  onToggle,
+  onHover,
+  children,
+}: {
+  name: string;
+  open: boolean;
+  onToggle: () => void;
+  onHover: () => void;
+  children: React.ReactNode;
+}) {
+  const btn = useRef<HTMLButtonElement>(null);
+  return (
+    <div className="relative overflow-visible">
+      <button
+        ref={btn}
+        className={`px-2.5 py-1 capitalize ${open ? "bg-[#f5a623] text-black" : "hover:bg-white/10"}`}
+        onClick={onToggle}
+        onMouseEnter={onHover}
+      >
+        {name}
+      </button>
+      {open && (
+        <BarDropdown anchor={btn.current}>
+          {children}
+        </BarDropdown>
+      )}
+    </div>
+  );
+}
+
+function BarDropdown({ anchor, children }: { anchor: HTMLButtonElement | null; children: React.ReactNode }) {
+  const [pos, setPos] = useState({ left: 8, top: 32 });
+  useLayoutEffect(() => {
+    if (!anchor) return;
+    const place = () => {
+      const r = anchor.getBoundingClientRect();
+      const width = 280;
+      const left = Math.min(Math.max(4, r.left), window.innerWidth - width - 4);
+      const top = r.bottom;
+      setPos({ left, top });
+    };
+    place();
+    window.addEventListener("resize", place);
+    return () => window.removeEventListener("resize", place);
+  }, [anchor]);
+  if (typeof document === "undefined") return null;
+  return createPortal(
+    <div
+      data-wo-menu
+      className="fixed z-[10000] max-h-[min(72vh,calc(100vh-40px))] min-w-[260px] overflow-auto border border-[#111] bg-[#1f1f1f] py-1 shadow-2xl"
+      style={{ left: pos.left, top: pos.top }}
+      onPointerDown={(e) => e.stopPropagation()}
+    >
+      {children}
+    </div>,
+    document.body,
+  );
+}
+
 function Item({
   label,
   shortcut,
@@ -111,7 +181,10 @@ function Item({
   return (
     <button
       className={`flex w-full items-center justify-between px-3 py-1.5 text-left hover:bg-[#f5a623] hover:text-black ${danger ? "text-red-300" : ""}`}
-      onClick={onClick}
+      onClick={() => {
+        onClick();
+        useApp.getState().setMenu(null);
+      }}
     >
       <span>
         {checked !== undefined && <span className="mr-2 inline-block w-3">{checked ? "✓" : ""}</span>}
@@ -193,6 +266,18 @@ function TimelineMenu() {
   const a = useApp.getState;
   return (
     <>
+      <Item label="Add Timeline" onClick={() => { a().addTimeline(); a().setMenu(null); }} />
+      <Item
+        label="Delete Timeline"
+        danger
+        onClick={() => {
+          const sel = a().selection;
+          const id = sel.kind === "timeline" ? sel.ids[0] : a().activeTimelineId;
+          if (id) a().deleteTimeline(id);
+          a().setMenu(null);
+        }}
+      />
+      <Sep />
       <Item label="Add Play Control Cue" shortcut="Ctrl+P" onClick={() => { a().addCueType("control"); a().setMenu(null); }} />
       <Item label="Add Marker Cue" onClick={() => { a().addCueType("marker"); a().setMenu(null); }} />
       <Item label="Add Output Cue" onClick={() => { a().addCueType("output"); a().setMenu(null); }} />

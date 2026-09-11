@@ -108,3 +108,10 @@ export function findCrossfadePair(cues: Cue[], selectedIds: string[]): [Cue, Cue
   }
   return null;
 }
+
+/** Always keep at least one timeline. */
+export function removeTimelines<T extends { id: string }>(timelines: T[], ids: Iterable<string>): T[] {
+  const drop = new Set(ids);
+  const next = timelines.filter((t) => !drop.has(t.id));
+  return next.length > 0 ? next : timelines;
+}

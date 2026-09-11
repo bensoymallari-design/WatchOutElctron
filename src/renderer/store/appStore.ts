@@ -15,7 +15,7 @@ import { defaultLayout, liveLayout, programmingLayout } from "@/lib/layout";
 import { uid } from "@/lib/ids";
 import { emptyCue, emptyDisplay, emptyLayer, emptyShow, emptyTimeline, emptyAsset, makeDemoShow } from "@/lib/showFactory";
 import { makeTween } from "@/lib/tweens";
-import { cueEnd, findCrossfadePair } from "@/lib/timeline";
+import { cueEnd, findCrossfadePair, removeTimelines } from "@/lib/timeline";
 import { connectCamera, connectScreen, connectUrl } from "@/lib/liveSources";
 import { downloadShow, loadLayouts, loadRecents, loadShowLocal, saveLayouts, saveShowLocal, type RecentShow } from "@/lib/persistence";
 import { fitTransform, displayForCue, type FitMode } from "@/lib/stageGeometry";
@@ -133,6 +133,7 @@ interface AppActions {
   updateAsset: (id: string, partial: Partial<Asset>) => void;
   deleteAsset: (id: string) => void;
   addTimeline: () => void;
+  deleteTimeline: (id: string) => void;
   updateTimeline: (id: string, partial: Partial<Timeline>) => void;
   updateShowPrefs: (partial: Partial<Show["prefs"]>) => void;
   updateVariable: (id: string, partial: Partial<Show["variables"][number]>) => void;
@@ -824,7 +825,16 @@ export const useApp = create<AppState & AppActions>((set, get) => ({
       ),
     ),
 
-  deleteSelected: () =>
+  deleteSelected: () => {
+    const current = get();
+    if (current.selection.kind === "timeline" && current.selection.ids[0]) {
+      get().deleteTimeline(current.selection.ids[0]);
+      return;
+    }
+    if (current.selection.kind === "layer" && current.selection.ids[0]) {
+      get().deleteLayer(current.selection.ids[0]);
+      return;
+    }
     set((s) =>
       patchShow(s, (show) => {
         const ids = new Set(s.selection.ids);
@@ -839,7 +849,8 @@ export const useApp = create<AppState & AppActions>((set, get) => ({
         }
         return show;
       }),
-    ),
+    );
+  },
 
   duplicateSelected: () =>
     set((s) =>
@@ -1255,6 +1266,29 @@ export const useApp = create<AppState & AppActions>((set, get) => ({
         timelines: [...show.timelines, emptyTimeline(`Timeline ${show.timelines.length + 1}`)],
       })),
     ),
+
+  deleteTimeline: (id) => {
+    const show = get().show;
+    if (!show) return;
+    if (show.timelines.length <= 1) {
+      get().log("Keep at least one timeline", "warn");
+      return;
+    }
+    if (!show.timelines.some((t) => t.id === id)) return;
+    set((s) => {
+      const patch = patchShow(s, (doc) => ({
+        ...doc,
+        timelines: removeTimelines(doc.timelines, [id]),
+      }));
+      const next = patch.show;
+      const activeTimelineId =
+        next && s.activeTimelineId === id ? (next.timelines[0]?.id ?? null) : s.activeTimelineId;
+      const selection =
+        s.selection.kind === "timeline" && s.selection.ids.includes(id) ? { kind: "none" as const, ids: [] } : s.selection;
+      return { ...patch, activeTimelineId, selection };
+    });
+    get().log("Deleted timeline");
+  },
 
   updateTimeline: (id, partial) =>
     set((s) =>

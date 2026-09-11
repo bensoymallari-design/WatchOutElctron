@@ -53,9 +53,9 @@ npm run dist:win
 
 The installer is:
 
-`release/WATCHOUT-Producer-Setup-7.8.1.exe`
+`release/WATCHOUT-Producer-Setup-7.8.2.exe`
 
-Double-click it. It adds **WATCHOUT Producer** to the Start Menu and desktop. That `.exe` is what you copy to other PCs. The splash screen must say **PRODUCER 7.8.1** — an older 7.8.0 install will not have Assign screens or Test beep.
+Double-click it. It adds **WATCHOUT Producer** to the Start Menu and desktop. That `.exe` is what you copy to other PCs. The splash screen must say **PRODUCER 7.8.2**.
 
 If `electron` is missing after install (the `install scripts not yet covered by allowScripts` warning), run the three `approve` commands, then `npm install` again, then `npm run dist:win`.
 

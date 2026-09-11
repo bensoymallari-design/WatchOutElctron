@@ -2,7 +2,7 @@
 import { useState } from "react";
 import { useApp, useActiveTimeline } from "@/store/appStore";
 import { formatMs } from "@/lib/time";
-import { Pause, Play, Square, Plus } from "lucide-react";
+import { Pause, Play, Square, Plus, Trash2 } from "lucide-react";
 import { PopupMenu } from "@/components/ContextMenu";
 
 export function TimelinesWindow() {
@@ -57,6 +57,10 @@ export function TimelinesWindow() {
                 <Mini icon={<Play size={10} />} onClick={() => useApp.getState().setPlayback(t.id, "play")} />
                 <Mini icon={<Pause size={10} />} onClick={() => useApp.getState().setPlayback(t.id, "pause")} />
                 <Mini icon={<Square size={10} />} onClick={() => useApp.getState().setPlayback(t.id, "stop")} />
+                <Mini
+                  icon={<Trash2 size={10} />}
+                  onClick={() => useApp.getState().deleteTimeline(t.id)}
+                />
               </span>
             </button>
           );
@@ -79,6 +83,16 @@ export function TimelinesWindow() {
             {
               label: "Rename in Properties",
               onClick: () => useApp.getState().focusWindow("properties"),
+            },
+            { sep: true },
+            {
+              label: "Delete Timeline",
+              danger: true,
+              shortcut: "Del",
+              onClick: () => {
+                const id = useApp.getState().activeTimelineId;
+                if (id) useApp.getState().deleteTimeline(id);
+              },
             },
           ]}
         />

@@ -9,6 +9,7 @@ import {
   findCrossfadePair,
   isAllowedOverlap,
   overlapMs,
+  removeTimelines,
   snapTime,
 } from "./timeline";
 
@@ -94,4 +95,11 @@ test("snap and pair helpers", () => {
   const b = cue({ id: "b", layerId: "l1", start: 2000, duration: 1000 });
   const pair = findCrossfadePair([a, b], ["a"]);
   assert.deepEqual(pair?.map((c) => c.id), ["a", "b"]);
+});
+
+test("deleting timelines always leaves at least one", () => {
+  const tls = [{ id: "a" }, { id: "b" }, { id: "c" }];
+  assert.deepEqual(removeTimelines(tls, ["b"]).map((t) => t.id), ["a", "c"]);
+  assert.deepEqual(removeTimelines(tls, ["a", "b", "c"]).map((t) => t.id), ["a", "b", "c"]);
+  assert.deepEqual(removeTimelines([{ id: "only" }], ["only"]).map((t) => t.id), ["only"]);
 });
