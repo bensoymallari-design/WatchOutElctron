@@ -58,6 +58,7 @@ interface AppState {
   fpsNow: number;
   liveTick: number;
   showPath: string | null;
+  contentGen: number;
 }
 
 interface AppActions {
@@ -158,7 +159,7 @@ function patchShow(state: AppState, mutator: (show: Show) => Show, record = true
   const next = mutator(structuredClone(state.show));
   next.modifiedAt = new Date().toISOString();
   const history = record ? [...state.history.slice(-49), snapshot(state.show)] : state.history;
-  return { show: next, history, future: record ? [] : state.future };
+  return { show: next, history, future: record ? [] : state.future, contentGen: state.contentGen + 1 };
 }
 
 function activeTimeline(show: Show | null, id: string | null) {
@@ -194,6 +195,7 @@ export const useApp = create<AppState & AppActions>((set, get) => ({
   fpsNow: 60,
   liveTick: 0,
   showPath: null,
+  contentGen: 0,
 
   boot: () => {
     const apply = (recents: RecentShow[], presets: Record<number, WindowLayout[]>) => set({ recents, presets });

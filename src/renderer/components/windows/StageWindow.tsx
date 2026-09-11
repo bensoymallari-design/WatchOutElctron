@@ -24,11 +24,15 @@ export function StageWindow() {
 
   useEffect(() => {
     let raf = 0;
-    const paint = () => {
+    let lastPaint = 0;
+    const paint = (now: number) => {
       const canvas = canvasRef.current;
       const state = useApp.getState();
       const current = state.show;
-      if (canvas && current) {
+      const playing = current?.timelines.some((t) => t.playback === "play");
+      const minDt = playing ? 33 : 16;
+      if (canvas && current && now - lastPaint >= minDt) {
+        lastPaint = now;
         const cues = collectStageCues(current);
         drawStage({
           canvas,
@@ -37,11 +41,11 @@ export function StageWindow() {
           assets: current.assets,
           camera: state.camera,
           selectedIds: state.selection.ids,
-          timeMs: performance.now(),
+          timeMs: now,
           showGrid: true,
           highlightDisplayId: hoverDisplayRef.current,
           snapGuides: snapGuidesRef.current,
-          playing: current.timelines.some((t) => t.playback === "play"),
+          playing: !!playing,
         });
       }
       raf = requestAnimationFrame(paint);

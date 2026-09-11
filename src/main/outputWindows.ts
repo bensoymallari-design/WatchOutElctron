@@ -71,39 +71,40 @@ export async function openOutput(opts: OpenOutputOptions) {
     (opts.screenId ? screens.find((s) => s.id === opts.screenId) : undefined) ??
     preferredScreen(screens, opts.channel ?? 1) ??
     screens[0];
-  const fullscreen = opts.fullscreen !== false;
   const win = new BrowserWindow({
     x: target.left,
     y: target.top,
     width: target.width,
     height: target.height,
-    fullscreen,
-    simpleFullscreen: fullscreen,
+    fullscreen: false,
+    simpleFullscreen: false,
     frame: false,
+    transparent: false,
     autoHideMenuBar: true,
     backgroundColor: "#000000",
     title: `WATCHOUT · ${opts.displayName}`,
     show: false,
+    skipTaskbar: true,
     webPreferences: {
       preload,
       sandbox: false,
       contextIsolation: true,
       backgroundThrottling: false,
       nodeIntegration: false,
+      webSecurity: false,
+      autoplayPolicy: "no-user-gesture-required",
     },
   });
   win.setMenuBarVisibility(false);
-  if (fullscreen) {
-    win.setAlwaysOnTop(true, "screen-saver");
-  }
   win.webContents.setBackgroundThrottling(false);
+  win.webContents.setFrameRate(60);
   const url = `${html}?displayId=${encodeURIComponent(opts.displayId)}`;
   if (html.startsWith("http")) await win.loadURL(url);
   else await win.loadFile(html, { query: { displayId: opts.displayId } });
   win.once("ready-to-show", () => {
     win.setBounds({ x: target.left, y: target.top, width: target.width, height: target.height });
-    if (fullscreen) win.setFullScreen(true);
     win.show();
+    win.setAlwaysOnTop(true, "screen-saver");
     win.moveTop();
   });
   win.on("closed", () => {

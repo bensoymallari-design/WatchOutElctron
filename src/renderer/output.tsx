@@ -1,6 +1,5 @@
 import { useEffect, useRef } from "react";
-import { cameraForDisplay, drawStage } from "@/lib/renderStage";
-import { collectStageCues } from "@/lib/stageCues";
+import { syncOutputFrame } from "@/lib/outputCompositor";
 import type { Show } from "@/types/show";
 import type { ClockPayload } from "../shared/ipc";
 
@@ -10,7 +9,7 @@ function displayIdFromUrl() {
 }
 
 export function OutputView() {
-  const canvasRef = useRef<HTMLCanvasElement>(null);
+  const hostRef = useRef<HTMLDivElement>(null);
   const showRef = useRef<Show | null>(null);
   const clockRef = useRef<ClockPayload | null>(null);
   const displayId = displayIdFromUrl();
@@ -43,9 +42,9 @@ export function OutputView() {
   useEffect(() => {
     let raf = 0;
     const paint = () => {
-      const canvas = canvasRef.current;
+      const host = hostRef.current;
       const show = showRef.current;
-      if (canvas && show) {
+      if (host && show) {
         const clock = clockRef.current;
         if (clock) {
           const byId = new Map(clock.timelines.map((t) => [t.id, t]));
@@ -58,23 +57,7 @@ export function OutputView() {
             }
           }
         }
-        const display = show.displays.find((d) => d.id === displayId) ?? show.displays[0];
-        if (display) {
-          const cues = collectStageCues(show);
-          drawStage({
-            canvas,
-            displays: show.displays,
-            cues,
-            assets: show.assets,
-            camera: cameraForDisplay(display, canvas.clientWidth, canvas.clientHeight),
-            selectedIds: [],
-            timeMs: performance.now(),
-            showGrid: false,
-            clipDisplay: display,
-            pixelPerfect: true,
-            playing: show.timelines.some((t) => t.playback === "play"),
-          });
-        }
+        syncOutputFrame(host, show, displayId);
       }
       raf = requestAnimationFrame(paint);
     };
@@ -82,5 +65,5 @@ export function OutputView() {
     return () => cancelAnimationFrame(raf);
   }, [displayId]);
 
-  return <canvas ref={canvasRef} />;
+  return <div ref={hostRef} style={{ position: "fixed", inset: 0, background: "#000" }} />;
 }

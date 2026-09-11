@@ -40,7 +40,8 @@ export function getVideo(
   }
   if (!freeRunning && localTimeMs != null && v.duration && Number.isFinite(v.duration)) {
     const target = (localTimeMs / 1000) % Math.max(v.duration, 0.001);
-    if (Math.abs(v.currentTime - target) > 0.12) v.currentTime = target;
+    const drift = Math.abs(v.currentTime - target);
+    if ((!playing && drift > 0.04) || drift > 0.45) v.currentTime = target;
   }
   if (!playing && !freeRunning) {
     if (!v.paused) v.pause();
@@ -153,7 +154,7 @@ export function drawStage(options: {
   }
   ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
   ctx.clearRect(0, 0, cssW, cssH);
-  ctx.fillStyle = "#121212";
+  ctx.fillStyle = clipDisplay ? "#000000" : "#121212";
   ctx.fillRect(0, 0, cssW, cssH);
 
   ctx.save();
@@ -239,7 +240,7 @@ export function drawStage(options: {
 
     if (src) {
       ctx.drawImage(src, 0, 0, w, h);
-    } else {
+    } else if (!clipDisplay) {
       ctx.fillStyle = cue.color;
       ctx.globalAlpha *= 0.45;
       ctx.fillRect(0, 0, w, h);

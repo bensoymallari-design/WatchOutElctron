@@ -1,6 +1,7 @@
 import { spawn } from "node:child_process";
 import { copyFile, mkdir } from "node:fs/promises";
 import { basename, extname, join } from "node:path";
+import { pathToFileURL } from "node:url";
 import { app, dialog, type BrowserWindow } from "electron";
 import { mediaKind, needsPlaybackProxy, proxyNote } from "../shared/codecs";
 import type { ImportedMedia } from "../shared/ipc";
@@ -98,19 +99,17 @@ async function transcodeProxy(src: string, dest: string, kind: "video" | "audio"
           src,
           "-an",
           "-c:v",
-          "libvpx-vp9",
+          "libvpx",
+          "-b:v",
+          "8M",
           "-pix_fmt",
           "yuv420p",
           "-deadline",
           "realtime",
           "-cpu-used",
           "8",
-          "-crf",
-          "34",
-          "-b:v",
+          "-auto-alt-ref",
           "0",
-          "-row-mt",
-          "1",
           dest,
         ];
   const result = await run(ffmpegBin, args, (chunk) => {
@@ -134,7 +133,7 @@ export async function mediaRoot() {
 }
 
 export function mediaUrl(filePath: string) {
-  return `watchout://local/file?path=${encodeURIComponent(filePath)}`;
+  return pathToFileURL(filePath).href;
 }
 
 let assetSeq = 0;

@@ -39,5 +39,5 @@ export function needsPlaybackProxy(codec: string, filePath: string, mime = "") {
 
 export function proxyNote(codec: string, usedProxy: boolean) {
   if (!usedProxy) return `Native Chromium decode · ${codec}`;
-  return `Playback proxy (VP9/WebM) · source ${codec}`;
+  return `Playback proxy (VP8/WebM) · source ${codec}`;
 }

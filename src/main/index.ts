@@ -51,7 +51,7 @@ function createMainWindow() {
       contextIsolation: true,
       backgroundThrottling: false,
       nodeIntegration: false,
-      webSecurity: true,
+      webSecurity: false,
     },
   });
   mainWindow.webContents.setBackgroundThrottling(false);
@@ -172,6 +172,8 @@ function bindIpc() {
 app.commandLine.appendSwitch("ignore-gpu-blocklist");
 app.commandLine.appendSwitch("enable-gpu-rasterization");
 app.commandLine.appendSwitch("enable-accelerated-video-decode");
+app.commandLine.appendSwitch("enable-accelerated-mjpeg-decode");
+app.commandLine.appendSwitch("autoplay-policy", "no-user-gesture-required");
 app.commandLine.appendSwitch("disable-renderer-backgrounding");
 app.commandLine.appendSwitch("disable-background-timer-throttling");
 app.commandLine.appendSwitch("disable-backgrounding-occluded-windows");
