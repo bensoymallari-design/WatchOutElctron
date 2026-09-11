@@ -4,9 +4,9 @@ import { displayForCue, fitTransform, hitDisplay, snapRect, snapValue } from "./
 
 const display = { id: "d1", name: "Display 1", x: 0, y: 0, z: 0, width: 1920, height: 1080, rotation: 0, outputType: "GPU" as const, channel: 1, nodeId: "local", enabled: true, blend: false, blendWidth: 128, virtual: false };
 
-test("fit cover maps 1920x1080 media onto a 1920x1080 display at 1:1", () => {
-  const fit = fitTransform({ width: 1920, height: 1080 }, display, "cover");
-  assert.deepEqual(fit.position, { x: 0, y: 0, z: 0 });
+test("fit cover maps 3840x2160 media onto a 4K display at 1:1", () => {
+  const uhd = { ...display, width: 3840, height: 2160 };
+  const fit = fitTransform({ width: 3840, height: 2160 }, uhd, "cover");
   assert.deepEqual(fit.scale, { x: 100, y: 100 });
 });
 

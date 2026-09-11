@@ -8,11 +8,16 @@ function displayIdFromUrl() {
   return params.get("displayId") ?? "";
 }
 
+function playAudioFromUrl() {
+  return new URLSearchParams(window.location.search).get("audio") === "1";
+}
+
 export function OutputView() {
   const hostRef = useRef<HTMLDivElement>(null);
   const showRef = useRef<Show | null>(null);
   const clockRef = useRef<ClockPayload | null>(null);
   const displayId = displayIdFromUrl();
+  const playAudio = playAudioFromUrl();
 
   useEffect(() => {
     const api = window.watchout;
@@ -57,13 +62,13 @@ export function OutputView() {
             }
           }
         }
-        syncOutputFrame(host, show, displayId);
+        syncOutputFrame(host, show, displayId, playAudio);
       }
       raf = requestAnimationFrame(paint);
     };
     raf = requestAnimationFrame(paint);
     return () => cancelAnimationFrame(raf);
-  }, [displayId]);
+  }, [displayId, playAudio]);
 
   return <div ref={hostRef} style={{ position: "fixed", inset: 0, background: "#000" }} />;
 }

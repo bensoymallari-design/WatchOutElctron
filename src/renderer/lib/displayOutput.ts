@@ -31,6 +31,10 @@ export function subscribeOutputs(fn: () => void) {
   };
 }
 
+export function hasLiveOutputs() {
+  return live.size > 0;
+}
+
 export function isOutputLive(displayId: string) {
   return live.has(displayId);
 }
@@ -49,8 +53,10 @@ export async function listScreens(): Promise<OutputScreen[]> {
         top: window.screenY,
         width: window.screen.width,
         height: window.screen.height,
+        physicalWidth: window.screen.width,
+        physicalHeight: window.screen.height,
         isPrimary: true,
-        scaleFactor: 1,
+        scaleFactor: window.devicePixelRatio || 1,
       },
     ];
   }

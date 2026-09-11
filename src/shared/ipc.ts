@@ -5,6 +5,8 @@ export interface OutputScreen {
   top: number;
   width: number;
   height: number;
+  physicalWidth: number;
+  physicalHeight: number;
   isPrimary: boolean;
   scaleFactor: number;
 }
@@ -24,6 +26,17 @@ export interface ImportedMedia {
   notes: string;
   originalPath: string;
   proxyPath?: string;
+  proxyVersion?: number;
+}
+
+export interface RebuildMediaRequest {
+  id: string;
+  name: string;
+  kind: "video" | "audio" | "image";
+  originalPath: string;
+  proxyVersion?: number;
+  width?: number;
+  height?: number;
 }
 
 export interface RecentShow {

@@ -1,5 +1,7 @@
 import type { Show } from "@/types/show";
 import { collectStageCues } from "@/lib/stageCues";
+import { applyAudioSink } from "@/lib/audioSink";
+import { hasLiveOutputs } from "@/lib/displayOutput";
 
 export interface AudibleClip {
   cueId: string;
@@ -11,6 +13,17 @@ export interface AudibleClip {
 }
 
 const players = new Map<string, HTMLVideoElement>();
+
+function host() {
+  let el = document.getElementById("wo-audio-mixer") as HTMLDivElement | null;
+  if (!el) {
+    el = document.createElement("div");
+    el.id = "wo-audio-mixer";
+    el.style.cssText = "position:fixed;left:0;top:0;width:2px;height:2px;overflow:hidden;opacity:0.02;pointer-events:none;z-index:0";
+    document.body.appendChild(el);
+  }
+  return el;
+}
 
 export function collectAudibleMedia(show: Show): AudibleClip[] {
   const assets = new Map(show.assets.map((a) => [a.id, a]));
@@ -34,16 +47,19 @@ export function collectAudibleMedia(show: Show): AudibleClip[] {
 }
 
 export function syncPlaybackAudio(show: Show | null) {
+  if (typeof document === "undefined") return;
   if (!show) {
     stopPlaybackAudio();
     return;
   }
+  const outputHasSound = hasLiveOutputs();
   const seen = new Set<string>();
   for (const clip of collectAudibleMedia(show)) {
     seen.add(clip.cueId);
     const el = getPlayer(clip.cueId, clip.url);
     el.volume = clip.volume;
-    el.muted = clip.volume <= 0.001;
+    el.muted = outputHasSound || clip.volume <= 0.001;
+    applyAudioSink(el, false);
     syncClock(el, clip.localTimeMs, clip.playing, clip.freeRunning);
   }
   for (const [id, el] of players) {
@@ -69,12 +85,21 @@ function getPlayer(id: string, url: string) {
     el.autoplay = true;
     el.disablePictureInPicture = true;
     el.setAttribute("data-role", "playback-audio");
+    el.style.cssText = "width:2px;height:2px;display:block";
+    host().appendChild(el);
+    const media = el;
+    media.addEventListener("error", () => {
+      const msg = media.error?.message || "media error";
+      console.warn("WATCHOUT audio", id, msg);
+    });
     players.set(id, el);
   }
   if (el.getAttribute("data-src") !== url) {
     el.src = url;
     el.setAttribute("data-src", url);
-    void el.play().catch(() => undefined);
+    void el.play().catch((err: unknown) => {
+      console.warn("WATCHOUT audio play", err);
+    });
   }
   return el;
 }
@@ -97,4 +122,5 @@ function release(el: HTMLVideoElement) {
   el.removeAttribute("src");
   el.removeAttribute("data-src");
   el.load();
+  el.remove();
 }
