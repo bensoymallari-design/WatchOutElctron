@@ -35,7 +35,7 @@ export function PopupMenu({
 
   return (
     <div
-      className="fixed z-[400] min-w-[200px] border border-[#111] bg-[#1f1f1f] py-1 text-[12px] shadow-2xl"
+      className="fixed z-[10000] min-w-[200px] border border-[#111] bg-[#1f1f1f] py-1 text-[12px] shadow-2xl"
       style={{ left: Math.min(x, window.innerWidth - 220), top: Math.min(y, window.innerHeight - 12 - items.length * 28) }}
       onPointerDown={(e) => e.stopPropagation()}
     >
