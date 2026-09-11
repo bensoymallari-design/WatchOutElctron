@@ -1,0 +1,70 @@
+{
+  "name": "watchout-electron",
+  "version": "7.8.0",
+  "private": true,
+  "description": "Desktop WATCHOUT 7 Producer — multi-display show composer with native fullscreen outputs",
+  "author": "WATCHOUT",
+  "license": "MIT",
+  "main": "./out/main/index.js",
+  "type": "module",
+  "scripts": {
+    "dev": "electron-vite dev",
+    "build": "electron-vite build",
+    "preview": "electron-vite preview",
+    "typecheck": "tsc -p tsconfig.node.json --noEmit && tsc -p tsconfig.web.json --noEmit",
+    "test": "npx --yes tsx --tsconfig tsconfig.web.json --test src/shared/codecs.test.ts src/renderer/lib/timeline.test.ts src/renderer/lib/ndiNames.test.ts src/renderer/lib/stageGeometry.test.ts",
+    "pack": "electron-vite build && electron-builder --dir",
+    "dist": "electron-vite build && electron-builder"
+  },
+  "dependencies": {
+    "clsx": "^2.1.1",
+    "lucide-react": "^0.542.0",
+    "react": "^19.2.1",
+    "react-dom": "^19.2.1",
+    "tailwind-merge": "^3.3.1",
+    "zustand": "^5.0.8"
+  },
+  "devDependencies": {
+    "@tailwindcss/vite": "^4.1.13",
+    "@types/node": "^24.3.0",
+    "@types/react": "^19.1.12",
+    "@types/react-dom": "^19.1.9",
+    "@vitejs/plugin-react": "^5.0.2",
+    "electron": "^36.3.2",
+    "electron-builder": "^26.0.12",
+    "electron-vite": "^4.0.0",
+    "tailwindcss": "^4.1.13",
+    "typescript": "^5.9.2",
+    "vite": "^6.3.5"
+  },
+  "build": {
+    "appId": "com.watchout.producer",
+    "productName": "WATCHOUT Producer",
+    "directories": {
+      "output": "release"
+    },
+    "files": [
+      "out/**/*",
+      "package.json"
+    ],
+    "extraMetadata": {
+      "main": "out/main/index.js"
+    },
+    "win": {
+      "target": ["nsis"],
+      "artifactName": "WATCHOUT-Producer-Setup-${version}.${ext}"
+    },
+    "mac": {
+      "target": ["dmg"],
+      "category": "public.app-category.video"
+    },
+    "linux": {
+      "target": ["AppImage", "deb"],
+      "category": "AudioVideo"
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true
+    }
+  }
+}
