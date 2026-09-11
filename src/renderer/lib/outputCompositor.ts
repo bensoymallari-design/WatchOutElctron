@@ -128,6 +128,8 @@ export function syncOutputFrame(host: HTMLElement, show: Show, displayId: string
 function makeMedia(asset: Asset | undefined, cueId: string) {
   if (asset?.kind === "video") {
     const v = document.createElement("video");
+    // Outputs stay silent so a 3-wide LED wall does not triple the soundtrack.
+    // Producer plays audio from the show clock (see playbackAudio.ts).
     v.muted = true;
     v.playsInline = true;
     v.loop = true;

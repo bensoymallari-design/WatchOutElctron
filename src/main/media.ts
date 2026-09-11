@@ -3,7 +3,7 @@ import { copyFile, mkdir } from "node:fs/promises";
 import { basename, extname, join } from "node:path";
 import { pathToFileURL } from "node:url";
 import { app, dialog, type BrowserWindow } from "electron";
-import { mediaKind, needsPlaybackProxy, proxyNote } from "../shared/codecs";
+import { mediaKind, needsPlaybackProxy, proxyFfmpegArgs, proxyNote } from "../shared/codecs";
 import type { ImportedMedia } from "../shared/ipc";
 
 function run(cmd: string, args: string[], onStderr?: (line: string) => void) {
@@ -90,32 +90,15 @@ async function probeFile(filePath: string): Promise<Probe> {
 }
 
 async function transcodeProxy(src: string, dest: string, kind: "video" | "audio", onProgress?: (msg: string) => void) {
-  const args =
-    kind === "audio"
-      ? ["-y", "-i", src, "-vn", "-c:a", "libopus", "-b:a", "192k", dest]
-      : [
-          "-y",
-          "-i",
-          src,
-          "-an",
-          "-c:v",
-          "libvpx",
-          "-b:v",
-          "8M",
-          "-pix_fmt",
-          "yuv420p",
-          "-deadline",
-          "realtime",
-          "-cpu-used",
-          "8",
-          "-auto-alt-ref",
-          "0",
-          dest,
-        ];
-  const result = await run(ffmpegBin, args, (chunk) => {
+  const onChunk = (chunk: string) => {
     const time = chunk.match(/time=(\d+:\d+:\d+\.\d+)/);
     if (time) onProgress?.(`Transcoding ${basename(src)}  ${time[1]}`);
-  });
+  };
+  let result = await run(ffmpegBin, proxyFfmpegArgs(kind, src, dest), onChunk);
+  if (result.code !== 0 && kind === "video") {
+    onProgress?.(`Retrying ${basename(src)} without audio`);
+    result = await run(ffmpegBin, proxyFfmpegArgs("video-silent", src, dest), onChunk);
+  }
   if (result.code !== 0) throw new Error(result.stderr.slice(-400) || "ffmpeg proxy failed");
 }
 
@@ -159,7 +142,7 @@ export async function importMediaFiles(
     let proxyPath: string | undefined;
     if (kind !== "image" && needsPlaybackProxy(info.codec, dest) && canFfmpeg) {
       const proxy = join(root, "proxies", `${id}.webm`);
-      onLog?.(`Building VP9 playback proxy for ${basename(src)} (${info.codec})`);
+      onLog?.(`Building VP8+Opus playback proxy for ${basename(src)} (${info.codec})`);
       try {
         await transcodeProxy(dest, proxy, kind, (msg) => onLog?.(msg));
         url = mediaUrl(proxy);

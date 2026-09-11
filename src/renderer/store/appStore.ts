@@ -202,7 +202,7 @@ export const useApp = create<AppState & AppActions>((set, get) => ({
     apply(loadRecents(), loadLayouts({}));
     void window.watchout?.recents().then((recents) => set({ recents }));
     void window.watchout?.ffmpegReady().then((ok) => {
-      if (ok) get().log("ffmpeg ready — HAP / ProRes / H.264 will build VP9 playback proxies");
+      if (ok) get().log("ffmpeg ready — HAP / ProRes / H.264 will build VP8+Opus proxies (picture + soundtrack)");
       else get().log("ffmpeg not found. Install ffmpeg for extra codec proxies (HAP, ProRes, H.264).", "warn");
     });
     void window.watchout?.gpuInfo().then((info) => {

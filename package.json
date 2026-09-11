@@ -12,7 +12,7 @@
     "build": "electron-vite build",
     "preview": "electron-vite preview",
     "typecheck": "tsc -p tsconfig.node.json --noEmit && tsc -p tsconfig.web.json --noEmit",
-    "test": "npx --yes tsx --tsconfig tsconfig.web.json --test src/shared/codecs.test.ts src/renderer/lib/timeline.test.ts src/renderer/lib/ndiNames.test.ts src/renderer/lib/stageGeometry.test.ts",
+    "test": "npx --yes tsx --tsconfig tsconfig.web.json --test src/shared/codecs.test.ts src/renderer/lib/timeline.test.ts src/renderer/lib/ndiNames.test.ts src/renderer/lib/stageGeometry.test.ts src/renderer/lib/playbackAudio.test.ts",
     "pack": "electron-vite build && electron-builder --dir",
     "dist": "electron-vite build && electron-builder",
     "dist:win": "electron-vite build && electron-builder --win nsis",

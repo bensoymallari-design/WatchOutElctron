@@ -1,5 +1,6 @@
 import { useEffect, useRef } from "react";
 import { useApp } from "@/store/appStore";
+import { stopPlaybackAudio, syncPlaybackAudio } from "@/lib/playbackAudio";
 
 export function PlaybackClock() {
   const setFpsNow = useApp((s) => s.setFpsNow);
@@ -42,6 +43,7 @@ export function PlaybackClock() {
           })),
         });
       }
+      syncPlaybackAudio(show);
     };
     let raf = 0;
     const loop = (now: number) => {
@@ -49,7 +51,10 @@ export function PlaybackClock() {
       raf = requestAnimationFrame(loop);
     };
     raf = requestAnimationFrame(loop);
-    return () => cancelAnimationFrame(raf);
+    return () => {
+      cancelAnimationFrame(raf);
+      stopPlaybackAudio();
+    };
   }, [setFpsNow]);
 
   return null;

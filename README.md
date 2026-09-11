@@ -9,7 +9,7 @@ Browser WATCHOUT clones lag, miss codecs, and cannot bind HDMI fullscreen the wa
 | Problem in the browser | Desktop app |
 | --- | --- |
 | Popup output + `requestFullscreen` | Frameless `BrowserWindow` placed on the target monitor, `setFullScreen(true)` |
-| Chromium missing HAP / ProRes / H.264 | ffmpeg probes media and builds a VP9/WebM playback proxy |
+| Chromium missing HAP / ProRes / H.264 | ffmpeg probes media and builds a VP8+Opus/WebM playback proxy |
 | Stage loop also painted popup canvases | Producer and outputs render in separate windows |
 | Blob URLs vanish on reload | Media is copied into the app library (`watchout://` protocol) |
 | File picker / save as download | Native Open / Save `.watch.json` |
@@ -79,10 +79,13 @@ Installers land in `release/`. Windows builds an NSIS setup; they are unsigned, 
 ## Workflow
 
 1. New Show or Demo Show (3-wide LED wall).
-2. **Assets → Import** — images, video, audio. Unsupported codecs get a VP9 proxy.
-3. Drag assets onto **Stage** (snaps 1:1 to a display) or **Timeline**.
-4. **Devices → Find screens**, then **Output** / **Output all**. Each WATCHOUT display becomes a fullscreen window on that monitor. Esc closes it.
-5. Space play/pause, Esc stop. File → Save writes `.watch.json`.
+2. **Assets → Import** — images, video, audio. Unsupported codecs get a VP8+Opus WebM proxy (picture **and** soundtrack).
+3. Drag assets onto **Stage** (snaps 1:1 to a display) or **Timeline**. Audio-only files go on the timeline; they play even with no picture.
+4. Press **Space**. If the clip has audio, it auto-plays from the Producer computer (Windows default speakers / headphones). Cue **Volume** in Properties is 0–100.
+5. **Devices → Find screens**, then **Output** / **Output all**. Each WATCHOUT display becomes a fullscreen window on that monitor. Esc closes it. Output windows stay muted so a 3-wide LED wall does not triple the sound.
+6. Space play/pause, Esc stop. File → Save writes `.watch.json`.
+
+If you imported MP4/MOV **before** this audio build, import those files again — older proxies stripped `-an` (no soundtrack). To hear sound on a TV, set that HDMI device as the Windows default playback device.
 
 ## Architecture
 

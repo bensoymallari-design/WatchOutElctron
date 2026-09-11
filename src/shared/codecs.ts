@@ -39,5 +39,34 @@ export function needsPlaybackProxy(codec: string, filePath: string, mime = "") {
 
 export function proxyNote(codec: string, usedProxy: boolean) {
   if (!usedProxy) return `Native Chromium decode · ${codec}`;
-  return `Playback proxy (VP8/WebM) · source ${codec}`;
+  return `Playback proxy (VP8+Opus/WebM) · source ${codec}`;
+}
+
+/** ffmpeg args for a Chromium-safe WebM proxy. Video keeps the first audio track as Opus. */
+export function proxyFfmpegArgs(kind: "video" | "audio" | "video-silent", src: string, dest: string): string[] {
+  if (kind === "audio") {
+    return ["-y", "-i", src, "-vn", "-c:a", "libopus", "-b:a", "192k", "-ar", "48000", dest];
+  }
+  const maps = kind === "video-silent" ? ["-map", "0:v:0", "-an"] : ["-map", "0:v:0", "-map", "0:a:0?"];
+  const audio = kind === "video-silent" ? [] : ["-c:a", "libopus", "-b:a", "160k", "-ac", "2", "-ar", "48000"];
+  return [
+    "-y",
+    "-i",
+    src,
+    ...maps,
+    "-c:v",
+    "libvpx",
+    "-b:v",
+    "8M",
+    "-pix_fmt",
+    "yuv420p",
+    "-deadline",
+    "realtime",
+    "-cpu-used",
+    "8",
+    "-auto-alt-ref",
+    "0",
+    ...audio,
+    dest,
+  ];
 }
