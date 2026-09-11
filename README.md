@@ -53,17 +53,17 @@ npm run dist:win
 
 The installer is:
 
-`release/WATCHOUT-Producer-Setup-7.8.0.exe`
+`release/WATCHOUT-Producer-Setup-7.8.1.exe`
 
-Double-click it. It adds **WATCHOUT Producer** to the Start Menu and desktop. That `.exe` is what you copy to other PCs.
+Double-click it. It adds **WATCHOUT Producer** to the Start Menu and desktop. That `.exe` is what you copy to other PCs. The splash screen must say **PRODUCER 7.8.1** — an older 7.8.0 install will not have Assign screens or Test beep.
 
 If `electron` is missing after install (the `install scripts not yet covered by allowScripts` warning), run the three `approve` commands, then `npm install` again, then `npm run dist:win`.
 
-Use the app branch if `main` is still empty:
-
 ```bash
-git fetch origin
-git checkout cursor/watchout-desktop-electron-1bfc
+git checkout main
+git pull
+npm install
+npm run dist:win
 ```
 
 ## Other platforms
@@ -81,11 +81,11 @@ Installers land in `release/`. Windows builds an NSIS setup; they are unsigned, 
 1. New Show or Demo Show (3-wide LED wall).
 2. **Assets → Import** — images, video, audio. Unsupported codecs get a VP9+Opus WebM proxy at the file’s real resolution (4K stays 4K, soundtrack kept). First import of a 4K clip can take a few minutes.
 3. Drag assets onto **Stage** (snaps 1:1 to a display) or **Timeline**. Audio-only files go on the timeline; they play even with no picture.
-4. **Devices → Find screens → Use size** so the WATCHOUT display matches the TV’s real pixels (a 4K TV becomes 3840×2160). Then **Output here**.
-5. Press **Space**. Sound plays on the TV output (HDMI audio when Windows lists it). Cue **Volume** in Properties is 0–100.
+4. Win+P → **Extend**. **Devices → Find screens → Assign screens** creates one Display per extra controller (not the laptop). On each Display row pick that monitor. Select a Display, then **Output** / **Output here**, or **Output all**. The same **Monitor** list is on the Display in Properties.
+5. **Devices → Audio**: pick **Speakers (Realtek)** (not HDMI/TV) → **Test beep**. Click the Stage, press **Space**. Cue **Volume** in Properties is 0–100.
 6. Space play/pause, Esc stop. File → Save writes `.watch.json`.
 
-If picture is still soft or silent, click **Assets → Rebuild HQ** (or re-import). Old VP8 `-an` proxies were low-bitrate and had no soundtrack. 1080p files on a 4K TV will still be upscaled — use a 4K file for a 4K wall.
+If the beep works but the video is silent, click **Assets → Rebuild HQ** (needs ffmpeg / ffmpeg-static). Old VP8 `-an` proxies had no soundtrack. 1080p files on a 4K TV will still be upscaled — use a 4K file for a 4K wall.
 
 ## Architecture
 
