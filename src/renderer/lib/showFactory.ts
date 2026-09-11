@@ -65,6 +65,7 @@ export function emptyDisplay(partial?: Partial<Display>): Display {
     blend: false,
     blendWidth: 128,
     virtual: false,
+    screenId: undefined,
     ...partial,
   };
 }

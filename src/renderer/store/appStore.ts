@@ -20,7 +20,8 @@ import { connectCamera, connectScreen, connectUrl } from "@/lib/liveSources";
 import { downloadShow, loadLayouts, loadRecents, loadShowLocal, saveLayouts, saveShowLocal, type RecentShow } from "@/lib/persistence";
 import { fitTransform, displayForCue, type FitMode } from "@/lib/stageGeometry";
 import { listScreens, openDisplayOutput, preferredOutputScreen } from "@/lib/displayOutput";
-import { PROXY_VERSION } from "../../shared/codecs";
+import { layoutDisplaysOnScreens, screenForDisplay } from "@/lib/screenAssign";
+import { needsHqRebuild } from "../../shared/codecs";
 import { unlockPlaybackAudio } from "@/lib/playbackAudio";
 
 export interface LogEntry {
@@ -79,6 +80,7 @@ interface AppActions {
   importDesktopAssets: () => Promise<void>;
   rebuildStaleMedia: () => Promise<void>;
   applyMonitorSize: (screenId?: string) => Promise<void>;
+  mapScreensToDisplays: (includeLaptop?: boolean) => Promise<void>;
   outputAllDisplays: () => Promise<void>;
   quitToWelcome: () => void;
   setShowName: (name: string) => void;
@@ -207,7 +209,7 @@ export const useApp = create<AppState & AppActions>((set, get) => ({
     void window.watchout?.recents().then((recents) => set({ recents }));
     void window.watchout?.ffmpegReady().then((ok) => {
       if (ok) get().log("ffmpeg ready — HAP / ProRes / H.264 build a VP9+Opus proxy at the file’s real pixels");
-      else get().log("ffmpeg not found. Install ffmpeg for extra codec proxies (HAP, ProRes, H.264).", "warn");
+      else get().log("ffmpeg not found. Install ffmpeg (PATH or ffmpeg-static) so H.264/AAC get a soundtrack Electron can play.", "warn");
     });
     void window.watchout?.gpuInfo().then((info) => {
       const gpu = info.slice(0, 180);
@@ -748,7 +750,7 @@ export const useApp = create<AppState & AppActions>((set, get) => ({
       show.displays[0];
     try {
       const screens = await listScreens();
-      const screen = preferredOutputScreen(screens, display.channel);
+      const screen = screenForDisplay(display, screens) ?? preferredOutputScreen(screens, display.channel);
       await openDisplayOutput(display.id, screen, {
         name: display.name,
         channel: display.channel,
@@ -771,7 +773,7 @@ export const useApp = create<AppState & AppActions>((set, get) => ({
     }
     const screens = await listScreens();
     for (const display of show.displays.filter((d) => d.enabled && !d.virtual)) {
-      const screen = preferredOutputScreen(screens, display.channel);
+      const screen = screenForDisplay(display, screens) ?? preferredOutputScreen(screens, display.channel);
       try {
         await openDisplayOutput(display.id, screen, {
           name: display.name,
@@ -1150,7 +1152,15 @@ export const useApp = create<AppState & AppActions>((set, get) => ({
     if (!show || !window.watchout?.rebuildMedia) return;
     const stale = show.assets.filter(
       (a): a is Asset & { originalPath: string; kind: "video" | "audio" } =>
-        (a.kind === "video" || a.kind === "audio") && !!a.originalPath && a.proxyVersion !== PROXY_VERSION,
+        (a.kind === "video" || a.kind === "audio") &&
+        !!a.originalPath &&
+        needsHqRebuild({
+          kind: a.kind,
+          codec: a.codec,
+          originalPath: a.originalPath,
+          proxyPath: a.proxyPath,
+          proxyVersion: a.proxyVersion,
+        }),
     );
     if (!stale.length) return;
     get().log(`Rebuilding ${stale.length} media file(s) at native resolution with soundtrack…`);
@@ -1160,7 +1170,9 @@ export const useApp = create<AppState & AppActions>((set, get) => ({
         name: a.name,
         kind: a.kind,
         originalPath: a.originalPath,
+        proxyPath: a.proxyPath,
         proxyVersion: a.proxyVersion,
+        codec: a.codec,
         width: a.width,
         height: a.height,
       })),
@@ -1201,8 +1213,26 @@ export const useApp = create<AppState & AppActions>((set, get) => ({
     const display = (selectedId ? show.displays.find((d) => d.id === selectedId) : undefined) ?? show.displays[0];
     const width = screen.physicalWidth || screen.width;
     const height = screen.physicalHeight || screen.height;
-    get().updateDisplay(display.id, { width, height });
-    get().log(`Display ${display.name} set to ${width}×${height} to match ${screen.label} (${screen.scaleFactor}× DPI)`);
+    get().updateDisplay(display.id, { width, height, screenId: screen.id });
+    get().log(`Display ${display.name} → ${screen.label} ${width}×${height}`);
+  },
+
+  mapScreensToDisplays: async (includeLaptop = false) => {
+    const screens = await listScreens();
+    if (!screens.length) {
+      get().log("No OS monitors found. Click Find screens.", "warn");
+      return;
+    }
+    set((s) =>
+      patchShow(s, (show) => ({
+        ...show,
+        displays: layoutDisplaysOnScreens(show.displays, screens, includeLaptop),
+      })),
+    );
+    setTimeout(() => get().frameDisplays(), 40);
+    const pool = includeLaptop ? screens : screens.filter((x) => !x.isPrimary);
+    const n = (pool.length ? pool : screens).length;
+    get().log(`Assigned ${n} screen(s) to Displays. Pick a monitor on each row, then Output or Output all.`);
   },
 
   updateAsset: (id, partial) =>

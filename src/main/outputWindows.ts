@@ -107,6 +107,7 @@ export async function openOutput(opts: OpenOutputOptions) {
   win.webContents.setBackgroundThrottling(false);
   win.webContents.setFrameRate(60);
   win.webContents.setVisualZoomLevelLimits(1, 1);
+  win.webContents.setAudioMuted(false);
   const playAudio = outputShouldPlayAudio(target, screens);
   const query: Record<string, string> = { displayId: opts.displayId };
   if (playAudio) query.audio = "1";

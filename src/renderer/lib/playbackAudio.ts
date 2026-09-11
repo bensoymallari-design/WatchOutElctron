@@ -1,5 +1,6 @@
 import type { Show } from "@/types/show";
 import { collectStageCues } from "@/lib/stageCues";
+import { applySavedSink } from "@/lib/audioOut";
 
 export interface AudibleClip {
   cueId: string;
@@ -10,7 +11,7 @@ export interface AudibleClip {
   freeRunning: boolean;
 }
 
-const players = new Map<string, HTMLAudioElement>();
+const players = new Map<string, HTMLVideoElement>();
 const silentUrls = new Set<string>();
 let audioCtx: AudioContext | null = null;
 let loggedPlayError = false;
@@ -21,7 +22,7 @@ function host() {
     el = document.createElement("div");
     el.id = "wo-audio-mixer";
     el.setAttribute("aria-hidden", "true");
-    el.style.cssText = "position:fixed;left:8px;bottom:8px;width:8px;height:8px;overflow:hidden;opacity:0.01;pointer-events:none;z-index:1";
+    el.style.cssText = "position:fixed;left:8px;bottom:8px;width:48px;height:28px;overflow:hidden;opacity:0.04;pointer-events:none;z-index:1";
     document.body.appendChild(el);
   }
   return el;
@@ -57,6 +58,7 @@ export function unlockPlaybackAudio() {
   }
   for (const el of players.values()) {
     el.muted = false;
+    applySavedSink(el);
     void el.play().catch(() => undefined);
   }
 }
@@ -73,6 +75,7 @@ export function syncPlaybackAudio(show: Show | null) {
     const el = getPlayer(clip.cueId, clip.url);
     el.volume = clip.volume;
     el.muted = clip.volume <= 0.001;
+    applySavedSink(el);
     syncClock(el, clip.localTimeMs, clip.playing, clip.freeRunning);
     warnIfSilent(el, clip.url, clip.playing);
   }
@@ -91,14 +94,17 @@ export function stopPlaybackAudio() {
 function getPlayer(id: string, url: string) {
   let el = players.get(id);
   if (!el) {
-    el = new Audio();
+    el = document.createElement("video");
     el.preload = "auto";
     el.loop = true;
     el.autoplay = true;
     el.muted = false;
+    el.playsInline = true;
     el.controls = false;
     el.setAttribute("data-role", "playback-audio");
+    el.style.cssText = "width:48px;height:28px;display:block";
     host().appendChild(el);
+    applySavedSink(el);
     const media = el;
     media.addEventListener("error", () => {
       note(`Audio failed to load (${media.error?.message || "media error"}). Import again or click Rebuild HQ.`, "error");
@@ -120,7 +126,7 @@ function getPlayer(id: string, url: string) {
   return el;
 }
 
-function syncClock(v: HTMLAudioElement, localTimeMs: number, playing: boolean, freeRunning: boolean) {
+function syncClock(v: HTMLVideoElement, localTimeMs: number, playing: boolean, freeRunning: boolean) {
   if (!freeRunning && v.duration && Number.isFinite(v.duration)) {
     const target = (localTimeMs / 1000) % Math.max(v.duration, 0.001);
     const drift = Math.abs(v.currentTime - target);
@@ -135,9 +141,9 @@ function syncClock(v: HTMLAudioElement, localTimeMs: number, playing: boolean, f
   }
 }
 
-function warnIfSilent(el: HTMLAudioElement, url: string, playing: boolean) {
+function warnIfSilent(el: HTMLVideoElement, url: string, playing: boolean) {
   if (!playing || silentUrls.has(url) || el.currentTime < 0.8) return;
-  const decoded = (el as HTMLAudioElement & { webkitAudioDecodedByteCount?: number }).webkitAudioDecodedByteCount;
+  const decoded = (el as HTMLVideoElement & { webkitAudioDecodedByteCount?: number }).webkitAudioDecodedByteCount;
   if (decoded === 0) {
     silentUrls.add(url);
     note("This clip has no soundtrack in the playback file. Assets → Rebuild HQ, then play again.", "warn");
@@ -148,7 +154,7 @@ function note(message: string, level: "info" | "warn" | "error") {
   window.__woLog?.(message, level);
 }
 
-function release(el: HTMLAudioElement) {
+function release(el: HTMLVideoElement) {
   el.pause();
   el.removeAttribute("src");
   el.removeAttribute("data-src");

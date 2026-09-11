@@ -4,8 +4,9 @@ import { existsSync } from "node:fs";
 import { basename, extname, join } from "node:path";
 import { pathToFileURL } from "node:url";
 import { app, dialog, type BrowserWindow } from "electron";
-import { mediaKind, needsPlaybackProxy, PROXY_VERSION, proxyFfmpegArgs, proxyNote, type ProxyKind } from "../shared/codecs";
+import { mediaKind, needsHqRebuild, needsPlaybackProxy, PROXY_VERSION, proxyFfmpegArgs, proxyNote, type ProxyKind } from "../shared/codecs";
 import type { ImportedMedia, RebuildMediaRequest } from "../shared/ipc";
+import { ffmpegCandidatePaths, ffprobeCandidatePaths } from "./ffmpegBins";
 
 function run(cmd: string, args: string[], onStderr?: (line: string) => void) {
   return new Promise<{ stdout: string; stderr: string; code: number }>((resolve, reject) => {
@@ -29,15 +30,26 @@ let ffmpegBin = "ffmpeg";
 let ffprobeBin = "ffprobe";
 let toolsReady: Promise<boolean> | null = null;
 
+async function firstWorking(candidates: string[]) {
+  for (const bin of candidates) {
+    try {
+      const result = await run(bin, ["-version"]);
+      if (result.code === 0) return bin;
+    } catch {
+      /* try next */
+    }
+  }
+  return null;
+}
+
 export function ffmpegAvailable() {
   toolsReady ??= (async () => {
-    try {
-      const a = await run(ffprobeBin, ["-version"]);
-      const b = await run(ffmpegBin, ["-version"]);
-      return a.code === 0 && b.code === 0;
-    } catch {
-      return false;
-    }
+    const ffmpeg = await firstWorking(ffmpegCandidatePaths());
+    const ffprobe = await firstWorking(ffprobeCandidatePaths());
+    if (!ffmpeg || !ffprobe) return false;
+    ffmpegBin = ffmpeg;
+    ffprobeBin = ffprobe;
+    return true;
   })();
   return toolsReady;
 }
@@ -104,6 +116,7 @@ async function transcodeProxy(
   dest: string,
   kind: "video" | "audio",
   size: { width: number; height: number },
+  keepAudio: boolean,
   onProgress?: (msg: string) => void,
 ) {
   const onChunk = (chunk: string) => {
@@ -116,8 +129,12 @@ async function transcodeProxy(
     onProgress?.(`VP9 failed for ${basename(src)}, trying VP8 with audio`);
     result = await tryKind("video-vp8");
   }
-  if (result.code !== 0 && kind === "video") {
-    onProgress?.(`Audio encode failed for ${basename(src)} — picture only`);
+  if (result.code !== 0 && kind === "video" && keepAudio) {
+    onProgress?.(`Opus failed for ${basename(src)}, trying Vorbis soundtrack`);
+    result = await tryKind("video-vorbis");
+  }
+  if (result.code !== 0 && kind === "video" && !keepAudio) {
+    onProgress?.(`${basename(src)} has no audio track — picture only`);
     result = await tryKind("video-silent");
   }
   if (result.code !== 0) throw new Error(result.stderr.slice(-400) || "ffmpeg proxy failed");
@@ -155,7 +172,13 @@ async function buildProxy(
   const proxy = proxyDest(root, id);
   const label = `${info.width || "?"}×${info.height || "?"} ${info.codec}`;
   onLog?.(`Building HQ VP9+Opus ${label} for ${basename(destFile)} — keeps file pixels, may take a few minutes`);
-  await transcodeProxy(destFile, proxy, kind, { width: info.width, height: info.height }, (msg) => onLog?.(msg));
+  await transcodeProxy(destFile, proxy, kind, { width: info.width, height: info.height }, info.hasAudio, (msg) => onLog?.(msg));
+  if (info.hasAudio) {
+    const built = await probeFile(proxy);
+    if (!built.hasAudio) {
+      throw new Error(`Proxy for ${basename(destFile)} lost the soundtrack. Install a full ffmpeg build (with libopus) and click Rebuild HQ.`);
+    }
+  }
   onLog?.(`Proxy ready: ${basename(destFile)} (${info.width}×${info.height}${info.hasAudio ? " + audio" : " · no audio track"})`);
   return proxy;
 }
@@ -169,7 +192,7 @@ export async function importMediaFiles(
   const root = await mediaRoot();
   const out: ImportedMedia[] = [];
   const canFfmpeg = await ffmpegAvailable();
-  if (!canFfmpeg) onLog?.("ffmpeg/ffprobe not found — importing originals. Install ffmpeg for HAP/ProRes/H.264 proxies.", "warn");
+  if (!canFfmpeg) onLog?.("ffmpeg/ffprobe not found — importing originals. Install ffmpeg (or npm i ffmpeg-static ffprobe-static) so H.264/AAC get a WebM soundtrack Electron can play.", "warn");
 
   for (const src of paths) {
     const id = `asset_${Date.now().toString(36)}${(assetSeq++).toString(36)}`;
@@ -192,7 +215,7 @@ export async function importMediaFiles(
         optimized = false;
         onLog?.(error instanceof Error ? error.message : "Proxy transcode failed", "error");
       }
-    } else if (kind !== "image") {
+    } else if (kind !== "image" && !needsPlaybackProxy(info.codec, dest)) {
       proxyVersion = PROXY_VERSION;
     }
     const silent = kind === "video" && !info.hasAudio;
@@ -222,11 +245,28 @@ export async function rebuildMediaAssets(
   onLog?: (message: string, level?: "info" | "warn" | "error") => void,
 ): Promise<ImportedMedia[]> {
   const canFfmpeg = await ffmpegAvailable();
+  if (!canFfmpeg) {
+    onLog?.(
+      "Cannot rebuild HQ files — ffmpeg/ffprobe not found. Install ffmpeg and add it to PATH, or run npm i ffmpeg-static ffprobe-static, then Rebuild HQ.",
+      "error",
+    );
+    return [];
+  }
   const out: ImportedMedia[] = [];
   for (const asset of assets) {
     if (asset.kind !== "video" && asset.kind !== "audio") continue;
     if (!asset.originalPath || !existsSync(asset.originalPath)) continue;
-    if (asset.proxyVersion === PROXY_VERSION) continue;
+    if (
+      !needsHqRebuild({
+        kind: asset.kind,
+        codec: asset.codec,
+        originalPath: asset.originalPath,
+        proxyPath: asset.proxyPath,
+        proxyVersion: asset.proxyVersion,
+      })
+    ) {
+      continue;
+    }
     const info = await probeFile(asset.originalPath);
     const kind = asset.kind;
     let url = mediaUrl(asset.originalPath);
@@ -234,10 +274,6 @@ export async function rebuildMediaAssets(
     let optimized = !needsPlaybackProxy(info.codec, asset.originalPath);
     let proxyVersion = PROXY_VERSION;
     if (needsPlaybackProxy(info.codec, asset.originalPath)) {
-      if (!canFfmpeg) {
-        onLog?.(`Cannot rebuild ${asset.name} — ffmpeg not found`, "warn");
-        continue;
-      }
       try {
         proxyPath = await buildProxy(asset.id, asset.originalPath, kind, info, onLog);
         url = mediaUrl(proxyPath);

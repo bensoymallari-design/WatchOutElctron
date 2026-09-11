@@ -197,6 +197,7 @@ export interface Display {
   blend: boolean;
   blendWidth: number;
   virtual: boolean;
+  screenId?: string;
 }
 
 export interface NodeService {

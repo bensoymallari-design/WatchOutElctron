@@ -34,7 +34,9 @@ export interface RebuildMediaRequest {
   name: string;
   kind: "video" | "audio" | "image";
   originalPath: string;
+  proxyPath?: string;
   proxyVersion?: number;
+  codec?: string;
   width?: number;
   height?: number;
 }

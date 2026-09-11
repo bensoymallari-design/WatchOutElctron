@@ -53,7 +53,21 @@ export function proxyCpuUsed(width: number, height: number) {
   return 4;
 }
 
-export type ProxyKind = "video" | "audio" | "video-vp8" | "video-silent";
+export type ProxyKind = "video" | "audio" | "video-vp8" | "video-vorbis" | "video-silent";
+
+export function needsHqRebuild(asset: {
+  kind: string;
+  codec?: string;
+  originalPath?: string;
+  proxyPath?: string;
+  proxyVersion?: number;
+}) {
+  if (asset.kind !== "video" && asset.kind !== "audio") return false;
+  if (!asset.originalPath) return false;
+  if (asset.proxyVersion !== PROXY_VERSION) return true;
+  if (asset.proxyPath) return false;
+  return needsPlaybackProxy(asset.codec || "", asset.originalPath);
+}
 
 export interface ProxySize {
   width: number;
@@ -67,7 +81,12 @@ export function proxyFfmpegArgs(kind: ProxyKind, src: string, dest: string, size
   }
   const cpu = String(proxyCpuUsed(size?.width ?? 1920, size?.height ?? 1080));
   const maps = kind === "video-silent" ? ["-map", "0:v:0", "-an"] : ["-map", "0:v:0", "-map", "0:a:0?"];
-  const audio = kind === "video-silent" ? [] : ["-c:a", "libopus", "-b:a", "192k", "-ac", "2", "-ar", "48000"];
+  const audio =
+    kind === "video-silent"
+      ? []
+      : kind === "video-vorbis"
+        ? ["-c:a", "libvorbis", "-q:a", "5", "-ac", "2"]
+        : ["-c:a", "libopus", "-b:a", "192k", "-ac", "2", "-ar", "48000"];
   const video =
     kind === "video-vp8"
       ? ["-c:v", "libvpx", "-crf", "10", "-b:v", "0", "-deadline", "good", "-cpu-used", cpu, "-auto-alt-ref", "0"]

@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { mediaKind, needsPlaybackProxy, proxyCpuUsed, proxyFfmpegArgs } from "./codecs";
+import { mediaKind, needsHqRebuild, needsPlaybackProxy, proxyCpuUsed, proxyFfmpegArgs } from "./codecs";
 
 test("classifies common media extensions", () => {
   assert.equal(mediaKind("wall.png"), "image");
@@ -45,4 +45,33 @@ test("audio-only proxy strips picture and encodes Opus", () => {
   const args = proxyFfmpegArgs("audio", "in.m4a", "out.webm");
   assert.ok(args.includes("-vn"));
   assert.ok(args.includes("libopus"));
+});
+
+test("vorbis fallback still maps an audio track", () => {
+  const args = proxyFfmpegArgs("video-vorbis", "in.mp4", "out.webm");
+  assert.equal(args.includes("-an"), false);
+  assert.ok(args.includes("libvorbis"));
+});
+
+test("stale or missing HQ proxies need a rebuild; native wav does not", () => {
+  assert.equal(
+    needsHqRebuild({ kind: "video", codec: "h264", originalPath: "clip.mp4", proxyVersion: 2 }),
+    true,
+  );
+  assert.equal(
+    needsHqRebuild({ kind: "video", codec: "h264", originalPath: "clip.mp4", proxyVersion: 3 }),
+    true,
+  );
+  assert.equal(
+    needsHqRebuild({
+      kind: "video",
+      codec: "h264",
+      originalPath: "clip.mp4",
+      proxyPath: "clip.v3.webm",
+      proxyVersion: 3,
+    }),
+    false,
+  );
+  assert.equal(needsHqRebuild({ kind: "audio", codec: "pcm_s16le", originalPath: "hit.wav", proxyVersion: 3 }), false);
+  assert.equal(needsHqRebuild({ kind: "image", originalPath: "card.png" }), false);
 });
