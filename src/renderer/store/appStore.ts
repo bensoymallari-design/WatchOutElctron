@@ -698,9 +698,18 @@ export const useApp = create<AppState & AppActions>((set, get) => ({
           fadeCurve: show.prefs.fadeCurve,
         });
         created = cue.id;
+        const end = cueStart + duration;
         return {
           ...show,
-          timelines: show.timelines.map((t) => (t.id === tl.id ? { ...t, cues: [...t.cues, cue] } : t)),
+          timelines: show.timelines.map((t) =>
+            t.id === tl.id
+              ? {
+                  ...t,
+                  duration: end > t.duration ? Math.ceil((end + 1000) / 1000) * 1000 : t.duration,
+                  cues: [...t.cues, cue],
+                }
+              : t,
+          ),
         };
       }),
     );

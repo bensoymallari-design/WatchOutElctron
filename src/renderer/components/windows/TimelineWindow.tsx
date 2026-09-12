@@ -52,6 +52,11 @@ export function TimelineWindow() {
   if (!tl || !show) return <div className="p-4 text-stone-500">No timeline</div>;
 
   const hover = tl.cues.find((c) => c.id === hoverCueId);
+  const hoverFile = hover?.assetId ? show.assets.find((a) => a.id === hover.assetId) : undefined;
+  const hoverFileMs =
+    hoverFile && (hoverFile.kind === "video" || hoverFile.kind === "audio") && hoverFile.duration > 0
+      ? hoverFile.duration
+      : 0;
   const selectedLayerId = selection.kind === "layer" ? selection.ids[0] : null;
 
   const timeAndLayerAt = (clientX: number, clientY: number) => {
@@ -125,7 +130,8 @@ export function TimelineWindow() {
         </button>
         {hover && (
           <span className="ml-4 truncate text-stone-400">
-            {hover.name}  ·  {formatMs(hover.start)}  ·  {formatMs(hover.duration)}
+            {hover.name}  ·  cue {formatMs(hover.duration)}
+            {hoverFileMs ? `  ·  file ${formatMs(hoverFileMs)}` : ""}
             {hover.fadeIn || hover.fadeOut ? `  ·  ${hover.fadeIn ? "fade-in" : ""}${hover.fadeIn && hover.fadeOut ? "/" : ""}${hover.fadeOut ? "fade-out" : ""}` : ""}
           </span>
         )}
