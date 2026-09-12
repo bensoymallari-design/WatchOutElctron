@@ -9,6 +9,7 @@ export function PlaybackClock() {
   const last = useRef(0);
   const lastGen = useRef(-1);
   const lastShowId = useRef<string>("");
+  const lastAutosave = useRef(0);
 
   useEffect(() => {
     const step = (now: number) => {
@@ -42,6 +43,10 @@ export function PlaybackClock() {
             rate: t.rate,
           })),
         });
+        if (now - lastAutosave.current > 60000) {
+          lastAutosave.current = now;
+          void window.watchout.autosave(JSON.stringify(show), show.name);
+        }
       }
       syncPlaybackAudio(show);
     };

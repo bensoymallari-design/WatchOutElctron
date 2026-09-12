@@ -1,10 +1,11 @@
 import { spawn } from "node:child_process";
-import { copyFile, mkdir } from "node:fs/promises";
+import { copyFile, mkdir, stat } from "node:fs/promises";
 import { existsSync } from "node:fs";
 import { basename, extname, join } from "node:path";
 import { pathToFileURL } from "node:url";
 import { app, dialog, type BrowserWindow } from "electron";
 import { mediaKind, needsHqRebuild, needsPlaybackProxy, PROXY_VERSION, proxyFfmpegArgs, proxyNote, type ProxyKind } from "../shared/codecs";
+import { formatBytes, largeMediaNote, shouldBuildFullProxy, shouldCopyOnImport } from "../shared/mediaPolicy";
 import type { ImportedMedia, RebuildMediaRequest } from "../shared/ipc";
 import { ffmpegCandidatePaths, ffprobeCandidatePaths } from "./ffmpegBins";
 
@@ -197,15 +198,24 @@ export async function importMediaFiles(
   for (const src of paths) {
     const id = `asset_${Date.now().toString(36)}${(assetSeq++).toString(36)}`;
     const ext = extname(src) || ".bin";
-    const dest = join(root, `${id}${ext}`);
-    await copyFile(src, dest);
+    const bytes = (await stat(src)).size;
+    const linked = !shouldCopyOnImport(bytes);
+    let dest = src;
+    if (linked) {
+      onLog?.(`Linking ${basename(src)} (${formatBytes(bytes)}) — playing from the original disk file, not copying into the app library`, "warn");
+    } else {
+      dest = join(root, `${id}${ext}`);
+      onLog?.(`Copying ${basename(src)} (${formatBytes(bytes)}) into the media library`);
+      await copyFile(src, dest);
+    }
     const kind = mediaKind(src);
     const info = await probeFile(dest);
     let url = mediaUrl(dest);
     let optimized = !needsPlaybackProxy(info.codec, dest);
     let proxyPath: string | undefined;
     let proxyVersion: number | undefined;
-    if (kind !== "image" && needsPlaybackProxy(info.codec, dest) && canFfmpeg) {
+    const canProxy = kind !== "image" && needsPlaybackProxy(info.codec, dest) && canFfmpeg && shouldBuildFullProxy(bytes, info.width, info.height);
+    if (canProxy) {
       try {
         proxyPath = await buildProxy(id, dest, kind, info, onLog);
         url = mediaUrl(proxyPath);
@@ -217,8 +227,15 @@ export async function importMediaFiles(
       }
     } else if (kind !== "image" && !needsPlaybackProxy(info.codec, dest)) {
       proxyVersion = PROXY_VERSION;
+    } else if (kind !== "image" && !shouldBuildFullProxy(bytes, info.width, info.height)) {
+      optimized = true;
+      onLog?.(
+        `${basename(src)} is ${formatBytes(bytes)} — skipping a full VP9 copy. Outputs stream the original file. Keep it on a fast NVMe.`,
+        "warn",
+      );
     }
     const silent = kind === "video" && !info.hasAudio;
+    const sizeNote = largeMediaNote(bytes, linked);
     out.push({
       id,
       name: basename(src).replace(/\.[^.]+$/, ""),
@@ -231,10 +248,12 @@ export async function importMediaFiles(
       codec: info.codec,
       color: colorFor(kind),
       optimized,
-      notes: `${basename(src)} · ${proxyNote(info.codec, !!proxyPath, info.width, info.height)}${silent ? " · no audio track" : ""}`,
+      notes: `${basename(src)} · ${sizeNote} · ${proxyNote(info.codec, !!proxyPath, info.width, info.height)}${silent ? " · no audio track" : ""}`,
       originalPath: dest,
       proxyPath,
       proxyVersion,
+      bytes,
+      linked,
     });
   }
   return out;
@@ -263,11 +282,22 @@ export async function rebuildMediaAssets(
         originalPath: asset.originalPath,
         proxyPath: asset.proxyPath,
         proxyVersion: asset.proxyVersion,
+        bytes: asset.bytes,
+        width: asset.width,
+        height: asset.height,
       })
     ) {
       continue;
     }
     const info = await probeFile(asset.originalPath);
+    const bytes = asset.bytes ?? (existsSync(asset.originalPath) ? (await stat(asset.originalPath)).size : 0);
+    if (!shouldBuildFullProxy(bytes, info.width, info.height)) {
+      onLog?.(
+        `Skipping HQ rebuild for ${asset.name} (${formatBytes(bytes)}) — event masters stream from disk instead of a second 100 GB proxy.`,
+        "warn",
+      );
+      continue;
+    }
     const kind = asset.kind;
     let url = mediaUrl(asset.originalPath);
     let proxyPath: string | undefined;
@@ -300,6 +330,8 @@ export async function rebuildMediaAssets(
       originalPath: asset.originalPath,
       proxyPath,
       proxyVersion,
+      bytes,
+      linked: asset.linked,
     });
   }
   return out;

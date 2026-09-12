@@ -74,4 +74,15 @@ test("stale or missing HQ proxies need a rebuild; native wav does not", () => {
   );
   assert.equal(needsHqRebuild({ kind: "audio", codec: "pcm_s16le", originalPath: "hit.wav", proxyVersion: 3 }), false);
   assert.equal(needsHqRebuild({ kind: "image", originalPath: "card.png" }), false);
+  assert.equal(
+    needsHqRebuild({
+      kind: "video",
+      codec: "h264",
+      originalPath: "show.mov",
+      bytes: 100 * 1024 * 1024 * 1024,
+      width: 3840,
+      height: 2160,
+    }),
+    false,
+  );
 });

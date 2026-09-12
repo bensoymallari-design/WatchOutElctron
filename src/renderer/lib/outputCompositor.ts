@@ -171,7 +171,7 @@ function makeMedia(asset: Asset | undefined, cueId: string, playAudio: boolean) 
     v.muted = !playAudio;
     v.playsInline = true;
     v.loop = true;
-    v.preload = "auto";
+    v.preload = "metadata";
     v.autoplay = true;
     v.disablePictureInPicture = true;
     v.setAttribute("data-cue", cueId);

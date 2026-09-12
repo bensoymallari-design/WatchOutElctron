@@ -184,6 +184,8 @@ app.commandLine.appendSwitch("autoplay-policy", "no-user-gesture-required");
 app.commandLine.appendSwitch("disable-renderer-backgrounding");
 app.commandLine.appendSwitch("disable-background-timer-throttling");
 app.commandLine.appendSwitch("disable-backgrounding-occluded-windows");
+app.commandLine.appendSwitch("disable-gpu-process-crash-limit");
+app.commandLine.appendSwitch("force-gpu-mem-available-mb", "4096");
 
 app.whenReady().then(() => {
   handleMediaProtocol();
@@ -194,6 +196,7 @@ app.whenReady().then(() => {
   startSignalServer();
   if (process.platform === "win32") app.setAppUserModelId("com.watchout.producer");
   blocker = powerSaveBlocker.start("prevent-display-sleep");
+  powerSaveBlocker.start("prevent-app-suspension");
   initOutputs({
     preload: preloadPath(),
     html: outputHtml(),

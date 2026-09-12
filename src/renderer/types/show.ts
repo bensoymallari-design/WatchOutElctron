@@ -179,6 +179,8 @@ export interface Asset {
   originalPath?: string;
   proxyPath?: string;
   proxyVersion?: number;
+  bytes?: number;
+  linked?: boolean;
 }
 
 export interface Display {

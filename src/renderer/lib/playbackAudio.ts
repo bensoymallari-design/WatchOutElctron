@@ -95,7 +95,7 @@ function getPlayer(id: string, url: string) {
   let el = players.get(id);
   if (!el) {
     el = document.createElement("video");
-    el.preload = "auto";
+    el.preload = "metadata";
     el.loop = true;
     el.autoplay = true;
     el.muted = false;

@@ -1,3 +1,5 @@
+import { shouldBuildFullProxy } from "./mediaPolicy";
+
 const IMAGE_EXT = new Set(["png", "jpg", "jpeg", "gif", "webp", "bmp", "svg", "tif", "tiff"]);
 const AUDIO_EXT = new Set(["wav", "flac", "ogg", "opus", "mp3", "m4a", "aac", "aif", "aiff"]);
 const VIDEO_EXT = new Set(["mp4", "mov", "mkv", "avi", "webm", "ogv", "m4v", "mxf", "wmv", "mpg", "mpeg", "ts", "mts"]);
@@ -61,9 +63,14 @@ export function needsHqRebuild(asset: {
   originalPath?: string;
   proxyPath?: string;
   proxyVersion?: number;
+  bytes?: number;
+  linked?: boolean;
+  width?: number;
+  height?: number;
 }) {
   if (asset.kind !== "video" && asset.kind !== "audio") return false;
   if (!asset.originalPath) return false;
+  if ((asset.bytes ?? 0) > 0 && !shouldBuildFullProxy(asset.bytes ?? 0, asset.width ?? 0, asset.height ?? 0)) return false;
   if (asset.proxyVersion !== PROXY_VERSION) return true;
   if (asset.proxyPath) return false;
   return needsPlaybackProxy(asset.codec || "", asset.originalPath);

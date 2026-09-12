@@ -1,6 +1,6 @@
 {
   "name": "watchout-electron",
-  "version": "7.8.3",
+  "version": "7.8.4",
   "private": true,
   "description": "Desktop WATCHOUT 7 Producer — multi-display show composer with native fullscreen outputs",
   "author": "WATCHOUT",
@@ -12,7 +12,7 @@
     "build": "electron-vite build",
     "preview": "electron-vite preview",
     "typecheck": "tsc -p tsconfig.node.json --noEmit && tsc -p tsconfig.web.json --noEmit",
-    "test": "npx --yes tsx --tsconfig tsconfig.web.json --test src/shared/codecs.test.ts src/renderer/lib/timeline.test.ts src/renderer/lib/ndiNames.test.ts src/renderer/lib/stageGeometry.test.ts src/renderer/lib/playbackAudio.test.ts src/renderer/lib/audioSink.test.ts src/renderer/lib/screenAssign.test.ts src/main/ffmpegBins.test.ts",
+    "test": "npx --yes tsx --tsconfig tsconfig.web.json --test src/shared/codecs.test.ts src/shared/mediaPolicy.test.ts src/renderer/lib/timeline.test.ts src/renderer/lib/ndiNames.test.ts src/renderer/lib/stageGeometry.test.ts src/renderer/lib/playbackAudio.test.ts src/renderer/lib/audioSink.test.ts src/renderer/lib/screenAssign.test.ts src/main/ffmpegBins.test.ts",
     "pack": "electron-vite build && electron-builder --dir",
     "dist": "electron-vite build && electron-builder",
     "dist:win": "electron-vite build && electron-builder --win nsis",
