@@ -25,6 +25,10 @@ function ensureRoot(host: HTMLElement) {
   return clip;
 }
 
+function setPx(el: HTMLElement, prop: "left" | "top" | "width" | "height", value: string) {
+  if (el.style[prop] !== value) el.style[prop] = value;
+}
+
 export function syncOutputFrame(host: HTMLElement, show: Show, displayId: string, playAudio = false) {
   const display = show.displays.find((d) => d.id === displayId) ?? show.displays[0];
   if (!display) return;
@@ -89,35 +93,36 @@ export function syncOutputFrame(host: HTMLElement, show: Show, displayId: string
     let layer = layers.get(cue.id);
     if (!layer) {
       const wrap = document.createElement("div");
-      wrap.style.cssText = "position:absolute;overflow:hidden;pointer-events:none;transform-origin:center center;background:#000";
+      wrap.style.cssText = "position:absolute;overflow:hidden;pointer-events:none;transform-origin:center center;background:#000;will-change:transform";
       const media = makeMedia(asset, cue.id, playAudio);
+      media.style.width = "100%";
+      media.style.height = "100%";
+      media.style.objectFit = "fill";
+      media.style.display = "block";
+      media.style.border = "0";
+      media.style.outline = "none";
+      media.style.background = "#000";
+      media.style.maxWidth = "none";
+      media.style.maxHeight = "none";
+      if (media instanceof HTMLVideoElement) media.style.transform = "translateZ(0)";
       wrap.appendChild(media);
       clip.appendChild(wrap);
       layer = { wrap, media };
       layers.set(cue.id, layer);
     }
     const { wrap, media } = layer;
-    wrap.style.left = `${x}px`;
-    wrap.style.top = `${y}px`;
-    wrap.style.width = `${Math.max(1, w)}px`;
-    wrap.style.height = `${Math.max(1, h)}px`;
-    wrap.style.opacity = String(Math.max(0, Math.min(1, ev.opacity / 100)));
-    wrap.style.zIndex = String(Math.round(ev.z + 1000));
-    wrap.style.transform = ev.rotZ ? `rotate(${ev.rotZ}deg)` : "none";
-    wrap.style.filter = cssFilter(ev);
-    wrap.style.willChange = "transform, opacity";
-    media.style.width = "100%";
-    media.style.height = "100%";
-    media.style.objectFit = "fill";
-    media.style.display = "block";
-    media.style.border = "0";
-    media.style.outline = "none";
-    media.style.background = "#000";
-    media.style.maxWidth = "none";
-    media.style.maxHeight = "none";
-    if (media instanceof HTMLVideoElement) {
-      media.style.transform = "translateZ(0)";
-    }
+    setPx(wrap, "left", `${x}px`);
+    setPx(wrap, "top", `${y}px`);
+    setPx(wrap, "width", `${Math.max(1, w)}px`);
+    setPx(wrap, "height", `${Math.max(1, h)}px`);
+    const opacity = String(Math.max(0, Math.min(1, ev.opacity / 100)));
+    if (wrap.style.opacity !== opacity) wrap.style.opacity = opacity;
+    const z = String(Math.round(ev.z + 1000));
+    if (wrap.style.zIndex !== z) wrap.style.zIndex = z;
+    const rot = ev.rotZ ? `rotate(${ev.rotZ}deg)` : "none";
+    if (wrap.style.transform !== rot) wrap.style.transform = rot;
+    const filter = cssFilter(ev);
+    if (wrap.style.filter !== filter) wrap.style.filter = filter;
 
     if (media instanceof HTMLVideoElement) {
       const live = asset ? getLiveVideo(asset.id) : null;

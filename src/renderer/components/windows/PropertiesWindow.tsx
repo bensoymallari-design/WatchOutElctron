@@ -175,6 +175,9 @@ function CueProps({ cue }: { cue: Cue }) {
       <Num label="Position Y" value={cue.position.y} onChange={(v) => u({ position: { ...cue.position, y: v } })} />
       <Num label="Scale X %" value={cue.scale.x} onChange={(v) => u({ scale: { ...cue.scale, x: v } })} />
       <Num label="Scale Y %" value={cue.scale.y} onChange={(v) => u({ scale: { ...cue.scale, y: v } })} />
+      <div className="text-[10px] leading-snug text-stone-500">
+        Drag the clip on Stage to move X/Y. Drag the amber squares on its sides to stretch it onto a Display — edges snap. Hold Shift to keep aspect. Arrows nudge 1 px, Shift+arrows 10 px.
+      </div>
       <div className="flex flex-wrap gap-1 py-1">
         <button className="rounded bg-[#f5a623] px-2 py-0.5 text-[11px] text-black" onClick={() => useApp.getState().fitSelectedToWall("cover")}>
           Snap to all displays

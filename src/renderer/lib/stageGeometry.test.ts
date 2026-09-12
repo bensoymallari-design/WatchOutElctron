@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { displayForCue, displayMoveGuides, fitTransform, hitDisplay, snapRect, snapValue, wallRect } from "./stageGeometry";
+import { displayForCue, displayMoveGuides, fitTransform, hitDisplay, hitResizeHandle, rectToCueTransform, resizeRect, snapRect, snapResizeRect, snapValue, wallRect } from "./stageGeometry";
 
 const display = { id: "d1", name: "Display 1", x: 0, y: 0, z: 0, width: 1920, height: 1080, rotation: 0, outputType: "GPU" as const, channel: 1, nodeId: "local", enabled: true, blend: false, blendWidth: 128, virtual: false };
 
@@ -81,4 +81,28 @@ test("fit cover maps one clip across a 2×2 1080p wall", () => {
   const wall = { x: 0, y: 0, width: 3840, height: 2160 };
   const fit = fitTransform({ width: 1920, height: 1080 }, wall, "cover");
   assert.deepEqual(fit.scale, { x: 200, y: 200 });
+});
+
+test("edge drag grows the right side; corner snap sticks to a display edge", () => {
+  const start = { x: 0, y: 0, w: 1920, h: 1080 };
+  const grown = resizeRect(start, "e", 80, 0);
+  assert.equal(grown.w, 2000);
+  assert.equal(grown.x, 0);
+  const handle = hitResizeHandle(start, { x: 1920, y: 540 }, 1);
+  assert.equal(handle, "e");
+  const snapped = snapResizeRect({ x: 0, y: 0, w: 1908, h: 1080 }, "e", [0, 1920], [0, 1080], 16);
+  assert.equal(snapped.w, 1920);
+  const transform = rectToCueTransform({ x: 10, y: 20, w: 3840, h: 1080 }, { width: 1920, height: 1080 });
+  assert.equal(transform.position.x, 10);
+  assert.deepEqual(transform.scale, { x: 200, y: 100 });
+});
+
+test("west edge drag moves X and shrinks width; snap sticks to a display origin", () => {
+  const start = { x: 80, y: 0, w: 1920, h: 1080 };
+  const shrunk = resizeRect(start, "w", -80, 0);
+  assert.equal(shrunk.x, 0);
+  assert.equal(shrunk.w, 2000);
+  const snapped = snapResizeRect({ x: 12, y: 0, w: 1908, h: 1080 }, "w", [0, 1920], [0, 1080], 16);
+  assert.equal(snapped.x, 0);
+  assert.equal(snapped.w, 1920);
 });

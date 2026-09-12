@@ -53,9 +53,9 @@ npm run dist:win
 
 The installer is:
 
-`release/WATCHOUT-Producer-Setup-7.8.10.exe`
+`release/WATCHOUT-Producer-Setup-7.8.11.exe`
 
-Double-click it. It adds **WATCHOUT Producer** to the Start Menu and desktop. That `.exe` is what you copy to other PCs. The splash screen must say **PRODUCER 7.8.10**. The header also shows **7.8.10**.
+Double-click it. It adds **WATCHOUT Producer** to the Start Menu and desktop. That `.exe` is what you copy to other PCs. The splash screen must say **PRODUCER 7.8.11**. The header also shows **7.8.11**.
 
 If `electron` is missing after install (the `install scripts not yet covered by allowScripts` warning), run the three `approve` commands, then `npm install` again, then `npm run dist:win`.
 
@@ -80,8 +80,8 @@ Installers land in `release/`. Windows builds an NSIS setup; they are unsigned, 
 
 1. New Show or Demo Show (3-wide LED wall).
 2. **Assets → Import** — images, video, audio. A 320 MB H.264 MP4 shows a first-frame still immediately and goes on the Timeline; Chromium then plays the VP9+Opus WebM once ffmpeg finishes (bundled in the installer). Amber dot = still building. To skip that wait: **File → Prepare videos for Producer** (or Assets → Prepare videos) overnight. That writes `clip.webm` next to `clip.mp4`. Import either file; playback starts immediately. Use **1080p** on a laptop, **full size** on the show PC. You can also run the same ffmpeg recipe yourself (Help → Prepare videos). **Delete** / trash removes an asset or NDI (and its cues). Extra timelines: Timelines panel **Delete**.
-3. Drag assets onto **Stage** (drop on one Display to fill only that screen) or **Timeline**. **Import** and double-click snap the clip across **all controllers** (the wall). Select the cue → **Fit wall** / **Snap to all displays** if you need to re-fit. Audio-only files go on the timeline; they play even with no picture. Files over ~2 GB are **linked** (not copied). Files around 100 GB stream from the original NVMe path — do not Rebuild HQ those masters.
-4. Win+P → **Extend**. Stage → grid icon: **4 columns × 1 row** (or 2×2) for four controllers. Drag Displays flush. **Devices → Find screens → Assign screens**. Then **Output all**. Press **Space** — one video, one clock, four slices. The same **Monitor** list is on the Display in Properties.
+3. Drag assets onto **Stage** (drop on one Display to fill only that screen) or **Timeline**. **Import** and double-click snap the clip across **all controllers** (the wall). Select the cue → **Fit wall** / **Snap to all displays** if you need to re-fit. Drag the clip to move X/Y; drag the amber squares on its sides to stretch it onto a Display (edges snap). Arrow keys nudge 1 px, Shift+arrows 10 px. Audio-only files go on the timeline; they play even with no picture. Files over ~2 GB are **linked** (not copied). Files around 100 GB stream from the original NVMe path — do not Rebuild HQ those masters.
+4. Win+P → **Extend**. Stage → grid icon: **4 columns × 1 row** (or 2×2) for four controllers. Drag Displays flush. **Devices → Find screens → Assign screens**. Then **Output all**. Press **Space** — one video, one clock, four slices. The same **Monitor** list is on the Display in Properties. On a **laptop** (Victus etc.) use **Output** (one screen) and a **1080p** WebM; **Output all** at full size is for the show PC. Transcode makes the file *playable* in Chromium — it is not Resolume DXV. Each Output window still decodes the whole VP9 clip; Producer now freezes the Stage/Assets preview while outputs are up so the laptop is not decoding it twice.
 5. **Devices → Audio**: pick **Speakers (Realtek)** (not HDMI/TV) → **Test beep**. Click the Stage, press **Space**. Cue **Volume** in Properties is 0–100. Timelines **Loop** by default for long-run events; the show autosaves every minute while open.
 6. Space play/pause, Esc stop. File → Save writes `.watch.json`.
 

@@ -95,6 +95,123 @@ function roundHundredths(n: number) {
   return Math.round(n * 100) / 100;
 }
 
+export type ResizeHandle = "n" | "ne" | "e" | "se" | "s" | "sw" | "w" | "nw";
+
+export function handleHitPad(zoom: number) {
+  return Math.max(14, 18 / Math.max(0.04, zoom));
+}
+
+export function resizeCursor(handle: ResizeHandle) {
+  if (handle === "n" || handle === "s") return "ns-resize";
+  if (handle === "e" || handle === "w") return "ew-resize";
+  if (handle === "ne" || handle === "sw") return "nesw-resize";
+  return "nwse-resize";
+}
+
+export function hitResizeHandle(rect: StageRect, pt: { x: number; y: number }, zoom: number): ResizeHandle | undefined {
+  const pad = handleHitPad(zoom);
+  const { x, y, w, h } = rect;
+  const nearL = Math.abs(pt.x - x) <= pad;
+  const nearR = Math.abs(pt.x - (x + w)) <= pad;
+  const nearT = Math.abs(pt.y - y) <= pad;
+  const nearB = Math.abs(pt.y - (y + h)) <= pad;
+  const inX = pt.x >= x - pad && pt.x <= x + w + pad;
+  const inY = pt.y >= y - pad && pt.y <= y + h + pad;
+  if (!inX || !inY) return undefined;
+  if (nearT && nearL) return "nw";
+  if (nearT && nearR) return "ne";
+  if (nearB && nearL) return "sw";
+  if (nearB && nearR) return "se";
+  if (nearT) return "n";
+  if (nearB) return "s";
+  if (nearL) return "w";
+  if (nearR) return "e";
+  return undefined;
+}
+
+export function resizeRect(start: StageRect, handle: ResizeHandle, dx: number, dy: number, keepAspect = false): StageRect {
+  let x = start.x;
+  let y = start.y;
+  let w = start.w;
+  let h = start.h;
+  if (handle.includes("e")) w = start.w + dx;
+  if (handle.includes("s")) h = start.h + dy;
+  if (handle.includes("w")) {
+    x = start.x + dx;
+    w = start.w - dx;
+  }
+  if (handle.includes("n")) {
+    y = start.y + dy;
+    h = start.h - dy;
+  }
+  if (keepAspect && start.h > 0) {
+    const aspect = start.w / start.h;
+    const corner = handle.length === 2;
+    if (corner) {
+      if (Math.abs(dx) * start.h >= Math.abs(dy) * start.w) h = w / aspect;
+      else w = h * aspect;
+      if (handle.includes("w")) x = start.x + start.w - w;
+      if (handle.includes("n")) y = start.y + start.h - h;
+    } else if (handle === "e" || handle === "w") {
+      h = w / aspect;
+      y = start.y + (start.h - h) / 2;
+      if (handle === "w") x = start.x + start.w - w;
+    } else {
+      w = h * aspect;
+      x = start.x + (start.w - w) / 2;
+      if (handle === "n") y = start.y + start.h - h;
+    }
+  }
+  const min = 32;
+  if (w < min) {
+    if (handle.includes("w")) x = start.x + start.w - min;
+    w = min;
+  }
+  if (h < min) {
+    if (handle.includes("n")) y = start.y + start.h - min;
+    h = min;
+  }
+  return { x, y, w, h };
+}
+
+export function snapResizeRect(rect: StageRect, handle: ResizeHandle, guidesX: number[], guidesY: number[], threshold: number): StageRect {
+  let { x, y, w, h } = rect;
+  if (handle.includes("w")) {
+    const next = snapValue(x, guidesX, threshold);
+    w += x - next;
+    x = next;
+  }
+  if (handle.includes("e")) w = snapValue(x + w, guidesX, threshold) - x;
+  if (handle.includes("n")) {
+    const next = snapValue(y, guidesY, threshold);
+    h += y - next;
+    y = next;
+  }
+  if (handle.includes("s")) h = snapValue(y + h, guidesY, threshold) - y;
+  const min = 32;
+  if (w < min) {
+    if (handle.includes("w")) x -= min - w;
+    w = min;
+  }
+  if (h < min) {
+    if (handle.includes("n")) y -= min - h;
+    h = min;
+  }
+  return { x, y, w, h };
+}
+
+export function rectToCueTransform(rect: StageRect, asset: Pick<Asset, "width" | "height">) {
+  const aw = Math.max(1, asset.width || 1920);
+  const ah = Math.max(1, asset.height || 1080);
+  return {
+    position: { x: Math.round(rect.x), y: Math.round(rect.y), z: 0 },
+    scale: {
+      x: roundHundredths((rect.w / aw) * 100),
+      y: roundHundredths((rect.h / ah) * 100),
+    },
+  };
+}
+
 export function nearestGuide(value: number, guides: number[], threshold: number) {
   let best: number | undefined;
   let dist = threshold;
