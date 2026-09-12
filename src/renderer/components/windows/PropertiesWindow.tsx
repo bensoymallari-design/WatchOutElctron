@@ -33,6 +33,14 @@ export function PropertiesWindow() {
           <Read label="Size" value={`${a.width}×${a.height}`} />
           <Read label="Duration" value={formatMs(a.duration)} />
           <Read label="Notes" value={a.notes || "—"} />
+          <div className="mt-2">
+            <button
+              className="rounded bg-[#5b1d1d] px-2 py-1 text-[11px] text-red-100"
+              onClick={() => useApp.getState().deleteAsset(a.id)}
+            >
+              {a.kind === "ndi" || a.kind === "capture" ? "Delete NDI" : "Delete asset"}
+            </button>
+          </div>
         </Panel>
       );
     }

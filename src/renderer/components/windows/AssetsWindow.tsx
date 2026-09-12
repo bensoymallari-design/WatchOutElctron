@@ -4,18 +4,25 @@ import { useApp } from "@/store/appStore";
 import { formatMs } from "@/lib/time";
 import { getLiveKind, getLiveVideo, subscribeLive } from "@/lib/liveSources";
 import { drawProcedural } from "@/lib/procedural";
-import { FolderPlus, Image as ImageIcon, Film, Music, Radio, Box } from "lucide-react";
+import { FolderPlus, Image as ImageIcon, Film, Music, Radio, Box, Trash2 } from "lucide-react";
 import type { Asset } from "@/types/show";
+import { PopupMenu } from "@/components/ContextMenu";
 
 export function AssetsWindow() {
   const show = useApp((s) => s.show);
   const selection = useApp((s) => s.selection);
   const liveTick = useApp((s) => s.liveTick);
+  const logs = useApp((s) => s.logs);
   const fileRef = useRef<HTMLInputElement>(null);
+  const [menu, setMenu] = useState<{ x: number; y: number; id: string } | null>(null);
   if (!show) return null;
   const selected = selection.kind === "asset" ? selection.ids : [];
   const preview = show.assets.find((a) => a.id === selected[0]);
   void liveTick;
+  const busy = logs.find((l) =>
+    /transcoding|building hq|copying |hq webm is building|ffmpeg\/ffprobe not found/i.test(l.message),
+  );
+  const selectedAsset = preview;
 
   return (
     <div className="flex h-full flex-col bg-[#171717]">
@@ -28,6 +35,13 @@ export function AssetsWindow() {
           onClick={() => void useApp.getState().rebuildStaleMedia()}
         >
           Rebuild HQ
+        </button>
+        <button
+          className="rounded bg-[#5b1d1d] px-2 py-0.5 text-red-100 disabled:opacity-40"
+          disabled={!selectedAsset}
+          onClick={() => selectedAsset && useApp.getState().deleteAsset(selectedAsset.id)}
+        >
+          {selectedAsset && (selectedAsset.kind === "ndi" || selectedAsset.kind === "capture") ? "Delete NDI" : "Delete"}
         </button>
         <button
           className="rounded bg-[#14532d] px-2 py-0.5 text-emerald-100"
@@ -73,6 +87,11 @@ export function AssetsWindow() {
           }}
         />
       </div>
+      {busy && (
+        <div className="border-b border-amber-900/60 bg-[#1a1408] px-2 py-1 text-[10px] leading-relaxed text-amber-100">
+          {busy.message}
+        </div>
+      )}
       <div className="grid min-h-0 flex-1 grid-cols-[1fr_140px]">
         <div className="overflow-auto">
           {show.assets.map((a) => (
@@ -86,6 +105,11 @@ export function AssetsWindow() {
               onDragEnd={() => useApp.getState().setDraggingAsset(null)}
               onClick={() => useApp.getState().select({ kind: "asset", ids: [a.id] })}
               onDoubleClick={() => useApp.getState().addCueFromAsset(a.id)}
+              onContextMenu={(e) => {
+                e.preventDefault();
+                useApp.getState().select({ kind: "asset", ids: [a.id] });
+                setMenu({ x: e.clientX, y: e.clientY, id: a.id });
+              }}
               className={`flex cursor-grab items-center gap-2 border-b border-[#222] px-2 py-1.5 ${
                 selected.includes(a.id) ? "bg-[#3b2a12]" : "hover:bg-white/5"
               }`}
@@ -95,9 +119,20 @@ export function AssetsWindow() {
                 <div className="truncate">{a.name}</div>
                 <div className="text-[10px] text-stone-500">
                   {a.kind} · {a.codec} · {a.width ? `${a.width}×${a.height}` : ""} · {formatMs(a.duration)}
+                  {!a.optimized && a.kind === "video" ? " · building HQ" : ""}
                 </div>
               </div>
               <span className={`h-2 w-2 rounded-full ${getLiveKind(a.id) ? "bg-emerald-400" : a.optimized ? "bg-emerald-700" : "bg-amber-400"}`} />
+              <button
+                className="grid h-5 w-5 place-items-center rounded text-stone-500 hover:bg-[#5b1d1d] hover:text-red-100"
+                title={a.kind === "ndi" || a.kind === "capture" ? "Delete NDI" : "Delete asset"}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  useApp.getState().deleteAsset(a.id);
+                }}
+              >
+                <Trash2 size={11} />
+              </button>
             </div>
           ))}
           {show.assets.length === 0 && (
@@ -111,6 +146,26 @@ export function AssetsWindow() {
           {preview && <div className="text-[10px] leading-relaxed text-stone-400">{preview.notes || preview.name}</div>}
         </div>
       </div>
+      {menu && (
+        <PopupMenu
+          x={menu.x}
+          y={menu.y}
+          onClose={() => setMenu(null)}
+          items={[
+            {
+              label: "Add to Timeline",
+              onClick: () => useApp.getState().addCueFromAsset(menu.id),
+            },
+            { sep: true },
+            {
+              label: show.assets.find((a) => a.id === menu.id)?.kind === "ndi" ? "Delete NDI" : "Delete asset",
+              danger: true,
+              shortcut: "Del",
+              onClick: () => useApp.getState().deleteAsset(menu.id),
+            },
+          ]}
+        />
+      )}
     </div>
   );
 }
@@ -165,7 +220,16 @@ function AssetPreview({ asset }: { asset?: Asset }) {
   if (asset.kind === "video" && asset.url) {
     return (
       <div className="checker mb-2 grid aspect-video place-items-center overflow-hidden rounded border border-[#333]">
-        <video src={asset.url} muted playsInline className="h-full w-full object-contain" />
+        <video
+          src={asset.url}
+          poster={asset.posterUrl}
+          muted
+          playsInline
+          autoPlay
+          loop
+          preload="auto"
+          className="h-full w-full object-contain"
+        />
       </div>
     );
   }

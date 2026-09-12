@@ -24,9 +24,11 @@ export function App() {
       if (action === "output") void a.outputSelectedDisplay();
     });
     const offLog = api.onLog((entry) => aLog(entry.message, entry.level));
+    const offMedia = api.onMediaUpdated?.((media) => useApp.getState().applyImportedMedia(media));
     return () => {
       offMenu();
       offLog();
+      offMedia?.();
     };
   }, []);
 

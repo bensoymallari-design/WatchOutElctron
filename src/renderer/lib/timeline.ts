@@ -115,3 +115,19 @@ export function removeTimelines<T extends { id: string }>(timelines: T[], ids: I
   const next = timelines.filter((t) => !drop.has(t.id));
   return next.length > 0 ? next : timelines;
 }
+
+/** Drop assets and any cues that pointed at them. */
+export function purgeAssets<T extends { assets: { id: string }[]; timelines: { cues: { assetId?: string }[] }[] }>(
+  show: T,
+  ids: Iterable<string>,
+): T {
+  const drop = new Set(ids);
+  return {
+    ...show,
+    assets: show.assets.filter((a) => !drop.has(a.id)),
+    timelines: show.timelines.map((t) => ({
+      ...t,
+      cues: t.cues.filter((c) => !c.assetId || !drop.has(c.assetId)),
+    })),
+  };
+}

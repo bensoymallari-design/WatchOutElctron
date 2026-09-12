@@ -1,3 +1,4 @@
+import { videoPreload } from "../../shared/mediaPolicy";
 import type { EvaluatedCue } from "@/lib/tweens";
 import type { Asset, Display } from "@/types/show";
 import { getLiveVideo } from "@/lib/liveSources";
@@ -24,6 +25,7 @@ export function getVideo(
   localTimeMs?: number,
   playing = true,
   freeRunning = false,
+  opts?: { bytes?: number; posterUrl?: string },
 ) {
   let v = videoCache.get(id);
   if (!v) {
@@ -31,8 +33,9 @@ export function getVideo(
     v.muted = true;
     v.loop = true;
     v.playsInline = true;
-    v.preload = "metadata";
-    v.crossOrigin = "anonymous";
+    v.preload = videoPreload(opts?.bytes);
+    if (opts?.posterUrl) v.poster = opts.posterUrl;
+    if (/^https?:/i.test(url)) v.crossOrigin = "anonymous";
     v.src = url;
     videoCache.set(id, v);
   } else if (v.getAttribute("src") !== url && !v.srcObject) {
@@ -83,8 +86,15 @@ function sourceFor(
     return procCanvas(asset.url.slice("procedural:".length), timeMs);
   }
   if (asset.kind === "video" && asset.url) {
-    const v = getVideo(asset.id || cueId, asset.url, localTimeMs, playing, freeRunning);
+    const v = getVideo(asset.id || cueId, asset.url, localTimeMs, playing, freeRunning, {
+      bytes: asset.bytes,
+      posterUrl: asset.posterUrl,
+    });
     if (v.readyState >= 2) return v;
+    if (asset.posterUrl) {
+      const img = getImage(asset.posterUrl);
+      if (img.complete && img.naturalWidth > 0) return img;
+    }
     return null;
   }
   if (asset.url) {
@@ -248,6 +258,10 @@ export function drawStage(options: {
       ctx.fillStyle = "#fff";
       ctx.font = `${Math.max(18, w / 18)}px ui-sans-serif`;
       ctx.fillText(cue.name, 24, Math.min(h, 64));
+      if (asset?.kind === "video" && !asset.optimized) {
+        ctx.font = `${Math.max(16, w / 28)}px ui-sans-serif`;
+        ctx.fillText("Building playback file… first frame may appear shortly", 24, Math.min(h, 64) + Math.max(22, w / 22));
+      }
     }
     ctx.filter = "none";
 

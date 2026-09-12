@@ -3,6 +3,7 @@ import { collectStageCues } from "@/lib/stageCues";
 import { getLiveVideo } from "@/lib/liveSources";
 import { drawProcedural } from "@/lib/procedural";
 import { applyAudioSink } from "@/lib/audioSink";
+import { videoPreload } from "../../shared/mediaPolicy";
 
 interface LayerEls {
   wrap: HTMLDivElement;
@@ -171,10 +172,11 @@ function makeMedia(asset: Asset | undefined, cueId: string, playAudio: boolean) 
     v.muted = !playAudio;
     v.playsInline = true;
     v.loop = true;
-    v.preload = "metadata";
+    v.preload = videoPreload(asset.bytes);
     v.autoplay = true;
     v.disablePictureInPicture = true;
     v.setAttribute("data-cue", cueId);
+    if (asset.posterUrl) v.poster = asset.posterUrl;
     if (asset.url) {
       v.src = asset.url;
       v.setAttribute("data-src", asset.url);

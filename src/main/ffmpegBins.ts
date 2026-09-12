@@ -1,29 +1,64 @@
 import { existsSync } from "node:fs";
 import { createRequire } from "node:module";
 import { homedir } from "node:os";
+import { join, sep } from "node:path";
 
 const require = createRequire(import.meta.url);
+
+/** electron-builder unpacks natives next to app.asar; require() still points inside the asar. */
+export function asarUnpackedPath(binPath: string) {
+  return binPath
+    .replace(`${sep}app.asar${sep}`, `${sep}app.asar.unpacked${sep}`)
+    .replace("/app.asar/", "/app.asar.unpacked/")
+    .replace("\\app.asar\\", "\\app.asar.unpacked\\");
+}
+
+export function resolvePackagedBinary(binPath: string | undefined) {
+  if (!binPath) return undefined;
+  const unpacked = asarUnpackedPath(binPath);
+  if (unpacked !== binPath && existsSync(unpacked)) return unpacked;
+  if (existsSync(binPath)) return binPath;
+  if (unpacked !== binPath) return unpacked;
+  return binPath;
+}
 
 export function staticBinary(pkg: "ffmpeg-static" | "ffprobe-static") {
   try {
     const mod = require(pkg) as string | { path?: string };
     const path = typeof mod === "string" ? mod : mod.path;
-    if (path && existsSync(path)) return path;
+    return resolvePackagedBinary(path);
   } catch {
     /* package not installed */
   }
   return undefined;
 }
 
+export function packagedResourceBins(
+  pkg: "ffmpeg-static" | "ffprobe-static",
+  platform: NodeJS.Platform = process.platform,
+  resourcesPath?: string,
+  arch: string = process.arch,
+) {
+  const root = resourcesPath || (typeof process !== "undefined" ? process.resourcesPath : "");
+  if (!root) return [];
+  const exe = platform === "win32" ? (pkg === "ffmpeg-static" ? "ffmpeg.exe" : "ffprobe.exe") : pkg === "ffmpeg-static" ? "ffmpeg" : "ffprobe";
+  const unpacked = join(root, "app.asar.unpacked", "node_modules");
+  if (pkg === "ffmpeg-static") return [join(unpacked, "ffmpeg-static", exe)];
+  const os = platform === "win32" ? "win32" : platform === "darwin" ? "darwin" : "linux";
+  return [join(unpacked, "ffprobe-static", "bin", os, arch, exe)];
+}
+
 export function ffmpegCandidatePaths(
   platform: NodeJS.Platform = process.platform,
   env: NodeJS.ProcessEnv = process.env,
   staticPath = staticBinary("ffmpeg-static"),
+  resourcesPath?: string,
 ) {
   const exe = platform === "win32" ? "ffmpeg.exe" : "ffmpeg";
   return unique([
     env.FFMPEG_PATH,
-    staticPath,
+    resolvePackagedBinary(staticPath),
+    ...packagedResourceBins("ffmpeg-static", platform, resourcesPath),
     exe,
     ...windowsBins(platform, env, exe),
     ...unixBins(platform, exe),
@@ -34,11 +69,13 @@ export function ffprobeCandidatePaths(
   platform: NodeJS.Platform = process.platform,
   env: NodeJS.ProcessEnv = process.env,
   staticPath = staticBinary("ffprobe-static"),
+  resourcesPath?: string,
 ) {
   const exe = platform === "win32" ? "ffprobe.exe" : "ffprobe";
   return unique([
     env.FFPROBE_PATH,
-    staticPath,
+    resolvePackagedBinary(staticPath),
+    ...packagedResourceBins("ffprobe-static", platform, resourcesPath),
     exe,
     ...windowsBins(platform, env, exe),
     ...unixBins(platform, exe),
@@ -65,7 +102,7 @@ function winJoin(...parts: string[]) {
 }
 
 function unixBins(platform: NodeJS.Platform, exe: string) {
-  if (platform === "win32") return [];
+  if (platform !== "win32") return [];
   return [`/usr/bin/${exe}`, `/usr/local/bin/${exe}`, `/opt/homebrew/bin/${exe}`];
 }
 

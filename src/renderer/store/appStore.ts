@@ -15,8 +15,8 @@ import { defaultLayout, liveLayout, programmingLayout } from "@/lib/layout";
 import { uid } from "@/lib/ids";
 import { emptyCue, emptyDisplay, emptyLayer, emptyShow, emptyTimeline, emptyAsset, makeDemoShow } from "@/lib/showFactory";
 import { makeTween } from "@/lib/tweens";
-import { cueEnd, findCrossfadePair, removeTimelines } from "@/lib/timeline";
-import { connectCamera, connectScreen, connectUrl } from "@/lib/liveSources";
+import { cueEnd, findCrossfadePair, purgeAssets, removeTimelines } from "@/lib/timeline";
+import { connectCamera, connectScreen, connectUrl, disconnectLive } from "@/lib/liveSources";
 import { downloadShow, loadLayouts, loadRecents, loadShowLocal, saveLayouts, saveShowLocal, type RecentShow } from "@/lib/persistence";
 import { fitTransform, displayForCue, type FitMode } from "@/lib/stageGeometry";
 import { listScreens, openDisplayOutput, preferredOutputScreen } from "@/lib/displayOutput";
@@ -78,6 +78,7 @@ interface AppActions {
   save: () => void;
   saveDownload: () => void;
   importDesktopAssets: () => Promise<void>;
+  applyImportedMedia: (media: import("../../shared/ipc").ImportedMedia) => void;
   rebuildStaleMedia: () => Promise<void>;
   applyMonitorSize: (screenId?: string) => Promise<void>;
   mapScreensToDisplays: (includeLaptop?: boolean) => Promise<void>;
@@ -835,6 +836,10 @@ export const useApp = create<AppState & AppActions>((set, get) => ({
       get().deleteLayer(current.selection.ids[0]);
       return;
     }
+    if (current.selection.kind === "asset") {
+      for (const id of current.selection.ids) get().deleteAsset(id);
+      return;
+    }
     set((s) =>
       patchShow(s, (show) => {
         const ids = new Set(s.selection.ids);
@@ -843,9 +848,6 @@ export const useApp = create<AppState & AppActions>((set, get) => ({
         }
         if (s.selection.kind === "display") {
           return { ...show, displays: show.displays.filter((d) => !ids.has(d.id)) };
-        }
-        if (s.selection.kind === "asset") {
-          return { ...show, assets: show.assets.filter((a) => !ids.has(a.id)) };
         }
         return show;
       }),
@@ -1098,7 +1100,31 @@ export const useApp = create<AppState & AppActions>((set, get) => ({
     const loaded = await window.watchout?.pickMedia();
     if (!loaded?.length) return;
     set((s) => patchShow(s, (show) => ({ ...show, assets: [...show.assets, ...loaded.map((m) => ({ ...m, folderId: null }))] })));
-    get().log(`Imported ${loaded.length} asset${loaded.length === 1 ? "" : "s"} into Asset Manager`);
+    const displayId = get().show?.displays[0]?.id;
+    const tl = get().show ? activeTimeline(get().show!, get().activeTimelineId) : null;
+    let start = tl?.playhead ?? 0;
+    for (const media of loaded) {
+      get().addCueFromAsset(media.id, undefined, start, displayId ? { displayId } : undefined);
+      start += media.duration || 5000;
+    }
+    get().log(
+      `Imported ${loaded.length} asset${loaded.length === 1 ? "" : "s"} onto Stage/Timeline. Press Space. If the picture is a still, HQ WebM is still building.`,
+    );
+  },
+
+  applyImportedMedia: (media) => {
+    set((s) =>
+      patchShow(
+        s,
+        (cur) => ({
+          ...cur,
+          assets: cur.assets.map((a) => (a.id === media.id ? { ...a, ...media, folderId: a.folderId } : a)),
+        }),
+        false,
+      ),
+    );
+    set((s) => ({ liveTick: s.liveTick + 1 }));
+    get().log(`Playback file ready: ${media.name} — press Space if the moving picture is not up yet.`);
   },
 
   importAssets: async (files) => {
@@ -1106,7 +1132,14 @@ export const useApp = create<AppState & AppActions>((set, get) => ({
     if (paths.length && window.watchout) {
       const loaded = await window.watchout.importPaths(paths);
       set((s) => patchShow(s, (show) => ({ ...show, assets: [...show.assets, ...loaded.map((m) => ({ ...m, folderId: null }))] })));
-      get().log(`Imported ${loaded.length} asset${loaded.length === 1 ? "" : "s"} into Asset Manager`);
+      get().log(`Imported ${loaded.length} asset${loaded.length === 1 ? "" : "s"} onto Stage/Timeline`);
+      const displayId = get().show?.displays[0]?.id;
+      const tl = get().show ? activeTimeline(get().show!, get().activeTimelineId) : null;
+      let start = tl?.playhead ?? 0;
+      for (const media of loaded) {
+        get().addCueFromAsset(media.id, undefined, start, displayId ? { displayId } : undefined);
+        start += media.duration || 5000;
+      }
       return;
     }
     const loaded: Asset[] = [];
@@ -1263,10 +1296,14 @@ export const useApp = create<AppState & AppActions>((set, get) => ({
       })),
     ),
 
-  deleteAsset: (id) =>
-    set((s) =>
-      patchShow(s, (show) => ({ ...show, assets: show.assets.filter((a) => a.id !== id) })),
-    ),
+  deleteAsset: (id) => {
+    disconnectLive(id);
+    set((s) => patchShow(s, (show) => purgeAssets(show, [id])));
+    if (get().selection.kind === "asset" && get().selection.ids.includes(id)) {
+      get().clearSelection();
+    }
+    get().log("Deleted asset");
+  },
 
   addTimeline: () =>
     set((s) =>

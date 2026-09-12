@@ -29,6 +29,7 @@ export interface ImportedMedia {
   proxyVersion?: number;
   bytes?: number;
   linked?: boolean;
+  posterUrl?: string;
 }
 
 export interface RebuildMediaRequest {
