@@ -11,6 +11,7 @@ import {
   overlapMs,
   removeTimelines,
   snapTime,
+  purgeAssets,
 } from "./timeline";
 
 function cue(partial: Partial<Cue> & Pick<Cue, "id" | "start" | "duration" | "layerId">): Cue {
@@ -102,4 +103,24 @@ test("deleting timelines always leaves at least one", () => {
   assert.deepEqual(removeTimelines(tls, ["b"]).map((t) => t.id), ["a", "c"]);
   assert.deepEqual(removeTimelines(tls, ["a", "b", "c"]).map((t) => t.id), ["a", "b", "c"]);
   assert.deepEqual(removeTimelines([{ id: "only" }], ["only"]).map((t) => t.id), ["only"]);
+});
+
+test("purging an NDI or video asset also removes its timeline cues", () => {
+  const show = {
+    assets: [{ id: "ndi" }, { id: "clip" }],
+    timelines: [
+      {
+        cues: [{ assetId: "ndi" }, { assetId: "clip" }, { assetId: undefined }],
+      },
+    ],
+  };
+  const next = purgeAssets(show, ["ndi"]);
+  assert.deepEqual(
+    next.assets.map((a) => a.id),
+    ["clip"],
+  );
+  assert.deepEqual(
+    next.timelines[0].cues.map((c) => c.assetId),
+    ["clip", undefined],
+  );
 });

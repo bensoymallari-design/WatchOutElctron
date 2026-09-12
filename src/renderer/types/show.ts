@@ -181,6 +181,7 @@ export interface Asset {
   proxyVersion?: number;
   bytes?: number;
   linked?: boolean;
+  posterUrl?: string;
 }
 
 export interface Display {

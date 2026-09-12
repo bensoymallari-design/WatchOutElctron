@@ -86,6 +86,10 @@ export function NdiConnectDialog() {
   }, [rankedCameras, sourceNames]);
 
   useEffect(() => {
+    useApp.getState().ensureNdiAsset();
+  }, []);
+
+  useEffect(() => {
     if (tab !== "browser") return;
     const assetId = useApp.getState().ensureNdiAsset();
     if (!assetId) return;

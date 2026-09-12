@@ -62,6 +62,11 @@ const api = {
     ipcRenderer.on("log", listener);
     return () => ipcRenderer.removeListener("log", listener);
   },
+  onMediaUpdated: (cb: (media: ImportedMedia) => void) => {
+    const listener = (_e: Electron.IpcRendererEvent, media: ImportedMedia) => cb(media);
+    ipcRenderer.on("media:updated", listener);
+    return () => ipcRenderer.removeListener("media:updated", listener);
+  },
 };
 
 contextBridge.exposeInMainWorld("watchout", api);

@@ -186,14 +186,32 @@ async function buildProxy(
 
 let assetSeq = 0;
 
+async function extractPoster(id: string, src: string) {
+  if (!(await ffmpegAvailable())) return undefined;
+  const root = await mediaRoot();
+  const poster = join(root, "proxies", `${id}.poster.jpg`);
+  const result = await run(ffmpegBin, ["-y", "-ss", "0.15", "-i", src, "-frames:v", "1", "-q:v", "3", poster]);
+  if (result.code !== 0 || !existsSync(poster)) return undefined;
+  return mediaUrl(poster);
+}
+
 export async function importMediaFiles(
   paths: string[],
   onLog?: (message: string, level?: "info" | "warn" | "error") => void,
+  onUpdated?: (media: ImportedMedia) => void,
 ): Promise<ImportedMedia[]> {
   const root = await mediaRoot();
   const out: ImportedMedia[] = [];
+  const proxyJobs: { media: ImportedMedia; dest: string; kind: "video" | "audio"; info: Probe }[] = [];
   const canFfmpeg = await ffmpegAvailable();
-  if (!canFfmpeg) onLog?.("ffmpeg/ffprobe not found — importing originals. Install ffmpeg (or npm i ffmpeg-static ffprobe-static) so H.264/AAC get a WebM soundtrack Electron can play.", "warn");
+  if (!canFfmpeg) {
+    onLog?.(
+      "ffmpeg/ffprobe not found — H.264 MP4 will import but stay black until a WebM proxy exists. Reinstall this Producer (it bundles ffmpeg) or install ffmpeg on PATH.",
+      "warn",
+    );
+  } else {
+    onLog?.(`Using ffmpeg at ${ffmpegBin}`);
+  }
 
   for (const src of paths) {
     const id = `asset_${Date.now().toString(36)}${(assetSeq++).toString(36)}`;
@@ -210,22 +228,12 @@ export async function importMediaFiles(
     }
     const kind = mediaKind(src);
     const info = await probeFile(dest);
-    let url = mediaUrl(dest);
+    const url = mediaUrl(dest);
     let optimized = !needsPlaybackProxy(info.codec, dest);
-    let proxyPath: string | undefined;
     let proxyVersion: number | undefined;
-    const canProxy = kind !== "image" && needsPlaybackProxy(info.codec, dest) && canFfmpeg && shouldBuildFullProxy(bytes, info.width, info.height);
-    if (canProxy) {
-      try {
-        proxyPath = await buildProxy(id, dest, kind, info, onLog);
-        url = mediaUrl(proxyPath);
-        optimized = true;
-        proxyVersion = PROXY_VERSION;
-      } catch (error) {
-        optimized = false;
-        onLog?.(error instanceof Error ? error.message : "Proxy transcode failed", "error");
-      }
-    } else if (kind !== "image" && !needsPlaybackProxy(info.codec, dest)) {
+    const canProxy =
+      kind !== "image" && needsPlaybackProxy(info.codec, dest) && canFfmpeg && shouldBuildFullProxy(bytes, info.width, info.height);
+    if (kind !== "image" && !needsPlaybackProxy(info.codec, dest)) {
       proxyVersion = PROXY_VERSION;
     } else if (kind !== "image" && !shouldBuildFullProxy(bytes, info.width, info.height)) {
       optimized = true;
@@ -236,7 +244,8 @@ export async function importMediaFiles(
     }
     const silent = kind === "video" && !info.hasAudio;
     const sizeNote = largeMediaNote(bytes, linked);
-    out.push({
+    const posterUrl = kind === "video" ? await extractPoster(id, dest) : undefined;
+    const media: ImportedMedia = {
       id,
       name: basename(src).replace(/\.[^.]+$/, ""),
       kind,
@@ -248,15 +257,50 @@ export async function importMediaFiles(
       codec: info.codec,
       color: colorFor(kind),
       optimized,
-      notes: `${basename(src)} · ${sizeNote} · ${proxyNote(info.codec, !!proxyPath, info.width, info.height)}${silent ? " · no audio track" : ""}`,
+      notes: canProxy
+        ? `${basename(src)} · ${sizeNote} · still showing first frame — building VP9+Opus WebM so Electron can play H.264`
+        : `${basename(src)} · ${sizeNote} · ${proxyNote(info.codec, false, info.width, info.height)}${silent ? " · no audio track" : ""}`,
       originalPath: dest,
-      proxyPath,
       proxyVersion,
       bytes,
       linked,
-    });
+      posterUrl,
+    };
+    if (canProxy) {
+      onLog?.(`Imported ${basename(src)} — picture should appear now. HQ WebM is building in the background (${formatBytes(bytes)}).`);
+      proxyJobs.push({ media, dest, kind, info });
+    }
+    out.push(media);
+  }
+
+  if (proxyJobs.length) {
+    void finishProxyJobs(proxyJobs, onLog, onUpdated);
   }
   return out;
+}
+
+async function finishProxyJobs(
+  jobs: { media: ImportedMedia; dest: string; kind: "video" | "audio"; info: Probe }[],
+  onLog?: (message: string, level?: "info" | "warn" | "error") => void,
+  onUpdated?: (media: ImportedMedia) => void,
+) {
+  for (const job of jobs) {
+    try {
+      const proxyPath = await buildProxy(job.media.id, job.dest, job.kind, job.info, onLog);
+      const silent = job.kind === "video" && !job.info.hasAudio;
+      onUpdated?.({
+        ...job.media,
+        url: mediaUrl(proxyPath),
+        optimized: true,
+        proxyPath,
+        proxyVersion: PROXY_VERSION,
+        notes: `${basename(job.dest)} · ${largeMediaNote(job.media.bytes ?? 0, !!job.media.linked)} · ${proxyNote(job.info.codec, true, job.info.width, job.info.height)}${silent ? " · no audio track" : ""}`,
+      });
+    } catch (error) {
+      onLog?.(error instanceof Error ? error.message : "Proxy transcode failed", "error");
+      onLog?.(`Click Rebuild HQ after ffmpeg works. Until then the Stage shows the first-frame still for ${job.media.name}.`, "warn");
+    }
+  }
 }
 
 export async function rebuildMediaAssets(

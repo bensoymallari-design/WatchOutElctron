@@ -17,7 +17,7 @@ import {
 import { autosave, loadRecents, openShowDialog, readShowFile, rememberShow, saveShowDialog } from "./shows";
 import { startSignalServer } from "./signaling";
 import { discoverNdiSources, lanIPv4 } from "../renderer/lib/ndiDiscover";
-import type { ClockPayload, OpenOutputOptions } from "../shared/ipc";
+import type { ClockPayload, ImportedMedia, OpenOutputOptions } from "../shared/ipc";
 
 registerMediaScheme();
 
@@ -96,6 +96,12 @@ function installMenu() {
 }
 
 function bindIpc() {
+  const mediaLog = (message: string, level?: "info" | "warn" | "error") => {
+    mainWindow?.webContents.send("log", { message, level: level ?? "info" });
+  };
+  const mediaUpdated = (media: ImportedMedia) => {
+    mainWindow?.webContents.send("media:updated", media);
+  };
   ipcMain.handle("displays:list", () => listScreens());
   ipcMain.handle("outputs:open", async (_e, opts: OpenOutputOptions) => {
     await openOutput(opts);
@@ -135,14 +141,10 @@ function bindIpc() {
 
   ipcMain.handle("media:pick", async () => {
     const paths = await pickMediaFiles(mainWindow);
-    return importMediaFiles(paths, (message, level) => {
-      mainWindow?.webContents.send("log", { message, level: level ?? "info" });
-    });
+    return importMediaFiles(paths, mediaLog, mediaUpdated);
   });
   ipcMain.handle("media:importPaths", async (_e, paths: string[]) => {
-    return importMediaFiles(paths, (message, level) => {
-      mainWindow?.webContents.send("log", { message, level: level ?? "info" });
-    });
+    return importMediaFiles(paths, mediaLog, mediaUpdated);
   });
   ipcMain.handle("media:ffmpeg", () => ffmpegAvailable());
   ipcMain.handle("media:rebuild", async (_e, assets: Parameters<typeof rebuildMediaAssets>[0]) => {

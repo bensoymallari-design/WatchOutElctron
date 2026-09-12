@@ -20,9 +20,22 @@ export function TimelinesWindow() {
     >
       <div className="flex items-center justify-between border-b border-black px-2 py-1 text-[11px] text-stone-400">
         <span>{show.timelines.length} timelines</span>
-        <button className="inline-flex items-center gap-1 hover:text-[#f5a623]" onClick={() => useApp.getState().addTimeline()}>
-          <Plus size={12} /> Add
-        </button>
+        <span className="flex gap-2">
+          {show.timelines.length > 1 && (
+            <button
+              className="inline-flex items-center gap-1 text-red-300 hover:text-red-100"
+              onClick={() => {
+                const id = useApp.getState().activeTimelineId;
+                if (id) useApp.getState().deleteTimeline(id);
+              }}
+            >
+              <Trash2 size={12} /> Delete
+            </button>
+          )}
+          <button className="inline-flex items-center gap-1 hover:text-[#f5a623]" onClick={() => useApp.getState().addTimeline()}>
+            <Plus size={12} /> Add
+          </button>
+        </span>
       </div>
       <div className="min-h-0 flex-1 overflow-auto">
         {show.timelines.map((t) => {
