@@ -97,6 +97,12 @@ export function StageWindow() {
         <Tool icon={<Focus size={12} />} onClick={() => useApp.getState().frameDisplays()} />
         <Tool icon={<Grid3x3 size={12} />} onClick={() => useApp.getState().setDialog("displayGrid")} />
         <button
+          className="rounded bg-[#f5a623] px-1.5 py-0.5 text-black"
+          onClick={() => useApp.getState().fitSelectedToWall("cover")}
+        >
+          Fit wall
+        </button>
+        <button
           className="rounded px-1.5 py-0.5 hover:bg-white/10"
           onClick={() => useApp.getState().fitSelectedToDisplay("cover")}
         >
@@ -110,8 +116,14 @@ export function StageWindow() {
             <Maximize2 size={11} /> Output
           </span>
         </button>
+        <button
+          className="rounded px-1.5 py-0.5 hover:bg-white/10"
+          onClick={() => void useApp.getState().outputAllDisplays()}
+        >
+          Output all
+        </button>
         <span className="ml-2">Stage px  ·  zoom {(camera.zoom * 100).toFixed(0)}%</span>
-        <span className="ml-auto text-stone-500">Drag a display to snap edges · drop asset on a display · Edit→Snap</span>
+        <span className="ml-auto text-stone-500">Fit wall = one clip across every controller · Output all · Space</span>
         <span>
           {show.displays.length} displays  ·  {show.displays.reduce((n, d) => n + d.width, 0)}×
           {Math.max(...show.displays.map((d) => d.height), 0)}
@@ -269,17 +281,7 @@ export function StageWindow() {
             useApp.getState().addCueFromAsset(assetId, undefined, undefined, { displayId: display.id });
             return;
           }
-          const asset = current.assets.find((a) => a.id === assetId);
-          const w = asset?.width ?? 1920;
-          const h = asset?.height ?? 1080;
-          let x = pt.x;
-          let y = pt.y;
-          if (snap) {
-            const snapped = snapRect({ x, y, w, h }, displayGuides(current.displays).x, displayGuides(current.displays).y, snapThreshold(cam.zoom));
-            x = snapped.x;
-            y = snapped.y;
-          }
-          useApp.getState().addCueFromAsset(assetId, undefined, undefined, { x: Math.round(x), y: Math.round(y) });
+          useApp.getState().addCueFromAsset(assetId);
         }}
       />
     </div>

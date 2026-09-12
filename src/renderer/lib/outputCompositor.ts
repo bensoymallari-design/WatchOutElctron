@@ -31,13 +31,13 @@ export function syncOutputFrame(host: HTMLElement, show: Show, displayId: string
   const clip = ensureRoot(host);
   const vw = host.clientWidth || window.innerWidth;
   const vh = host.clientHeight || window.innerHeight;
-  const scale = Math.min(vw / Math.max(1, display.width), vh / Math.max(1, display.height));
-  const dw = display.width * scale;
-  const dh = display.height * scale;
-  clip.style.left = `${(vw - dw) / 2}px`;
-  clip.style.top = `${(vh - dh) / 2}px`;
-  clip.style.width = `${dw}px`;
-  clip.style.height = `${dh}px`;
+  const scaleX = vw / Math.max(1, display.width);
+  const scaleY = vh / Math.max(1, display.height);
+  clip.style.left = "0px";
+  clip.style.top = "0px";
+  clip.style.width = `${vw}px`;
+  clip.style.height = `${vh}px`;
+  clip.style.background = "#000";
 
   const playing = show.timelines.some((t) => t.playback === "play");
   const cues = collectStageCues(show);
@@ -78,18 +78,18 @@ export function syncOutputFrame(host: HTMLElement, show: Show, displayId: string
 
     const aw = asset?.width || 1920;
     const ah = asset?.height || 1080;
-    const w = aw * (ev.scaleX / 100) * scale;
-    const h = ah * (ev.scaleY / 100) * scale;
-    const x = (ev.x - display.x) * scale;
-    const y = (ev.y - display.y) * scale;
-    if (x + w < -8 || y + h < -8 || x > dw + 8 || y > dh + 8) continue;
+    const w = aw * (ev.scaleX / 100) * scaleX;
+    const h = ah * (ev.scaleY / 100) * scaleY;
+    const x = (ev.x - display.x) * scaleX;
+    const y = (ev.y - display.y) * scaleY;
+    if (x + w < -8 || y + h < -8 || x > vw + 8 || y > vh + 8) continue;
     if (ev.opacity < 0.4) continue;
 
     seen.add(cue.id);
     let layer = layers.get(cue.id);
     if (!layer) {
       const wrap = document.createElement("div");
-      wrap.style.cssText = "position:absolute;overflow:hidden;pointer-events:none;transform-origin:center center";
+      wrap.style.cssText = "position:absolute;overflow:hidden;pointer-events:none;transform-origin:center center;background:#000";
       const media = makeMedia(asset, cue.id, playAudio);
       wrap.appendChild(media);
       clip.appendChild(wrap);
@@ -110,6 +110,11 @@ export function syncOutputFrame(host: HTMLElement, show: Show, displayId: string
     media.style.height = "100%";
     media.style.objectFit = "fill";
     media.style.display = "block";
+    media.style.border = "0";
+    media.style.outline = "none";
+    media.style.background = "#000";
+    media.style.maxWidth = "none";
+    media.style.maxHeight = "none";
     if (media instanceof HTMLVideoElement) {
       media.style.transform = "translateZ(0)";
     }
@@ -176,6 +181,9 @@ function makeMedia(asset: Asset | undefined, cueId: string, playAudio: boolean) 
     v.autoplay = true;
     v.disablePictureInPicture = true;
     v.setAttribute("data-cue", cueId);
+    v.style.background = "#000";
+    v.style.border = "0";
+    v.style.outline = "none";
     if (asset.posterUrl) v.poster = asset.posterUrl;
     if (asset.url) {
       v.src = asset.url;

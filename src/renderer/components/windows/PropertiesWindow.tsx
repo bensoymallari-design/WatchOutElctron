@@ -176,12 +176,18 @@ function CueProps({ cue }: { cue: Cue }) {
       <Num label="Scale X %" value={cue.scale.x} onChange={(v) => u({ scale: { ...cue.scale, x: v } })} />
       <Num label="Scale Y %" value={cue.scale.y} onChange={(v) => u({ scale: { ...cue.scale, y: v } })} />
       <div className="flex flex-wrap gap-1 py-1">
+        <button className="rounded bg-[#f5a623] px-2 py-0.5 text-[11px] text-black" onClick={() => useApp.getState().fitSelectedToWall("cover")}>
+          Snap to all displays
+        </button>
         <button className="rounded bg-[#14532d] px-2 py-0.5 text-[11px] text-emerald-100" onClick={() => useApp.getState().fitSelectedToDisplay("cover")}>
-          Fit to display
+          Fit to one display
         </button>
         <button className="rounded bg-[#333] px-2 py-0.5 text-[11px]" onClick={() => useApp.getState().fitSelectedToDisplay("contain")}>
-          Fit inside
+          Fit inside one
         </button>
+      </div>
+      <div className="text-[10px] leading-snug text-stone-500">
+        Snap to all displays stretches this clip across every controller. Output all — same playhead, each screen shows its slice.
       </div>
       <Num label="Rotation Z" value={cue.rotation.z} onChange={(v) => u({ rotation: { ...cue.rotation, z: v } })} />
       <Num label="Opacity" value={cue.opacity} onChange={(v) => u({ opacity: v })} />
@@ -237,6 +243,9 @@ function DisplayProps({ display }: { display: Display }) {
         </button>
         <button className="rounded bg-[#14532d] px-2 py-1 text-[11px] text-emerald-100" onClick={() => void useApp.getState().applyMonitorSize()}>
           Match TV pixels
+        </button>
+        <button className="rounded bg-[#14532d] px-2 py-1 text-[11px] text-emerald-100" onClick={() => useApp.getState().fitSelectedToWall("cover")}>
+          Snap cue to all displays
         </button>
         <button className="rounded bg-[#14532d] px-2 py-1 text-[11px] text-emerald-100" onClick={() => useApp.getState().fitSelectedToDisplay("cover")}>
           Snap cue to this display

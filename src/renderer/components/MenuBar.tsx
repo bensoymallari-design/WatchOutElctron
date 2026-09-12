@@ -37,7 +37,7 @@ export function MenuBar() {
   return (
     <div className="relative z-[1000] flex h-8 shrink-0 items-center overflow-visible border-b border-black bg-[#2a2a2a] px-1 text-[12px]" data-wo-menu>
       <div className="mr-3 px-2 text-[11px] font-black tracking-[0.28em] text-[#f5a623]">
-        WATCHOUT <span className="ml-1 font-semibold tracking-normal text-stone-200">7.8.9</span>
+        WATCHOUT <span className="ml-1 font-semibold tracking-normal text-stone-200">7.8.10</span>
       </div>
       {MENUS.map((name) => (
         <MenuSlot
@@ -257,6 +257,7 @@ function StageMenu() {
       <Item label="Create Display Grid…" onClick={() => a().setDialog("displayGrid")} />
       <Sep />
       <Item label="Frame All Displays" shortcut="Ctrl+Shift+D" onClick={() => { a().frameDisplays(); a().setMenu(null); }} />
+      <Item label="Fit Selected to Wall" shortcut="Ctrl+Shift+W" onClick={() => { a().fitSelectedToWall("cover"); a().setMenu(null); }} />
       <Item label="Fit Selected to Display" shortcut="Ctrl+Shift+F" onClick={() => { a().fitSelectedToDisplay("cover"); a().setMenu(null); }} />
       <Item label="Fit Inside Display" onClick={() => { a().fitSelectedToDisplay("contain"); a().setMenu(null); }} />
       <Item label="Output Selected Display" onClick={() => { void a().outputSelectedDisplay(); a().setMenu(null); }} />

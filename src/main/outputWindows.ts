@@ -1,5 +1,6 @@
 import { BrowserWindow, screen } from "electron";
 import type { ClockPayload, OpenOutputOptions, OutputScreen } from "../shared/ipc";
+import { OUTPUT_WINDOW_CHROME } from "./outputChrome";
 
 const outputs = new Map<string, BrowserWindow>();
 const lastOpts = new Map<string, OpenOutputOptions>();
@@ -86,15 +87,9 @@ export async function openOutput(opts: OpenOutputOptions) {
     y: target.top,
     width: target.width,
     height: target.height,
-    fullscreen: false,
-    simpleFullscreen: false,
-    frame: false,
-    transparent: false,
-    autoHideMenuBar: true,
-    backgroundColor: "#000000",
+    ...OUTPUT_WINDOW_CHROME,
     title: `WATCHOUT · ${opts.displayName}`,
     show: false,
-    skipTaskbar: true,
     webPreferences: {
       preload,
       sandbox: false,
@@ -106,6 +101,7 @@ export async function openOutput(opts: OpenOutputOptions) {
     },
   });
   win.setMenuBarVisibility(false);
+  win.setHasShadow(false);
   win.webContents.setBackgroundThrottling(false);
   win.webContents.setFrameRate(60);
   win.webContents.setVisualZoomLevelLimits(1, 1);
