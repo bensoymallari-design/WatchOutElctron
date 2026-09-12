@@ -228,9 +228,11 @@ export const useApp = create<AppState & AppActions>((set, get) => ({
   },
 
   log: (message, level = "info") => {
-    set((s) => ({
-      logs: [{ id: uid("log"), ts: Date.now(), level, message }, ...s.logs].slice(0, 200),
-    }));
+    set((s) => {
+      const next = { id: uid("log"), ts: Date.now(), level, message };
+      const sameTranscode = /^Transcoding /.test(message) && s.logs[0] && /^Transcoding /.test(s.logs[0].message);
+      return { logs: sameTranscode ? [next, ...s.logs.slice(1)] : [next, ...s.logs].slice(0, 200) };
+    });
   },
 
   setMenu: (menu) => set({ menu }),
