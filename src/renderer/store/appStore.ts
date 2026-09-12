@@ -146,7 +146,7 @@ interface AppActions {
   setFpsNow: (n: number) => void;
   toggleMessages: () => void;
   ensureNdiAsset: () => string | null;
-  connectLiveSource: (assetId: string, mode: "camera" | "screen" | "url", url?: string) => Promise<void>;
+  connectLiveSource: (assetId: string, mode: "camera" | "screen" | "url", url?: string, deviceId?: string) => Promise<boolean>;
 }
 
 function snapshot(show: Show | null) {
@@ -1362,16 +1362,21 @@ export const useApp = create<AppState & AppActions>((set, get) => ({
     return asset.id;
   },
 
-  connectLiveSource: async (assetId, mode, url) => {
+  connectLiveSource: async (assetId, mode, url, deviceId) => {
     try {
-      if (mode === "camera") await connectCamera(assetId);
+      if (mode === "camera") await connectCamera(assetId, deviceId);
       else if (mode === "screen") await connectScreen(assetId);
       else {
         if (!url) throw new Error("Enter a stream URL");
         await connectUrl(assetId, url);
       }
       get().updateAsset(assetId, {
-        notes: mode === "url" ? `Live URL · ${url}` : `Live ${mode} bound to this NDI input`,
+        notes:
+          mode === "url"
+            ? `Live URL · ${url}`
+            : mode === "camera" && deviceId
+              ? "Live NDI Webcam / camera bound to this input"
+              : `Live ${mode} bound to this NDI input`,
         codec: mode === "camera" ? "NDI · Camera" : mode === "screen" ? "NDI · Screen" : "NDI HX / URL",
         optimized: true,
       });
@@ -1380,9 +1385,11 @@ export const useApp = create<AppState & AppActions>((set, get) => ({
       const show = get().show;
       const used = show?.timelines.some((t) => t.cues.some((c) => c.assetId === assetId));
       if (!used) get().addCueFromAsset(assetId);
+      return true;
     } catch (error) {
       const message = error instanceof Error ? error.message : "NDI connect failed";
       get().log(message, "error");
+      return false;
     }
   },
 }));

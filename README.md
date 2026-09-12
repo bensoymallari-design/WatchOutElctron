@@ -53,9 +53,9 @@ npm run dist:win
 
 The installer is:
 
-`release/WATCHOUT-Producer-Setup-7.8.4.exe`
+`release/WATCHOUT-Producer-Setup-7.8.5.exe`
 
-Double-click it. It adds **WATCHOUT Producer** to the Start Menu and desktop. That `.exe` is what you copy to other PCs. The splash screen must say **PRODUCER 7.8.4**.
+Double-click it. It adds **WATCHOUT Producer** to the Start Menu and desktop. That `.exe` is what you copy to other PCs. The splash screen must say **PRODUCER 7.8.5**.
 
 If `electron` is missing after install (the `install scripts not yet covered by allowScripts` warning), run the three `approve` commands, then `npm install` again, then `npm run dist:win`.
 
@@ -93,6 +93,6 @@ If the beep works but the video is silent, click **Assets → Rebuild HQ** (need
 - **Director clock** — playhead in the Producer, pushed to outputs every frame (background throttling disabled)
 - **Runner outputs** — one native window per display, pixel-perfect clip of the stage
 - **Asset Manager** — copies media into userData, optional ffmpeg proxy
-- **LAN helper** — `http://127.0.0.1:4735` for phone-camera WebRTC and mDNS NDI name scan (native NDI decode still needs an NDI SDK; use PC Camera / Screen / URL)
+- **LAN helper** — `http://127.0.0.1:4735` for phone-camera WebRTC and mDNS NDI name scan. Native NDI (NDI Camera Pro on Android) is not a QR flow: keep that app streaming, install [NDI Tools](https://ndi.video/tools/), open **NDI Webcam Input**, pick the phone, then **Assets → NDI Camera Pro → Connect this camera**. The QR tab is Chrome/Safari only.
 
 Keyboard and window layout match WATCHOUT 7 (Alt+0 reset, Alt+1 programming, Alt+2 live).
