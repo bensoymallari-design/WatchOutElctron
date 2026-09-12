@@ -20,7 +20,7 @@ export function WelcomeScreen() {
         <div className="relative">
           <div className="mb-3 text-[11px] tracking-[0.45em] text-[#f5a623]">DATATON-STYLE SHOW CONTROL</div>
           <h1 className="text-[64px] font-black leading-none tracking-[0.18em] text-[#f5a623]">WATCHOUT</h1>
-          <div className="mt-2 text-lg tracking-[0.35em] text-stone-300">PRODUCER  7.8.4</div>
+          <div className="mt-2 text-lg tracking-[0.35em] text-stone-300">PRODUCER  7.8.5</div>
           <p className="mt-6 max-w-xl text-[13px] leading-relaxed text-stone-400">
             Native desktop Producer: Stage, Timeline, Assets, and Runner outputs on real monitors.
             Devices → Assign screens maps each Display to one of your controllers. Devices → Audio → Test beep

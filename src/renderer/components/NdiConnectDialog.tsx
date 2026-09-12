@@ -1,9 +1,16 @@
-
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useApp } from "@/store/appStore";
 import { uid } from "@/lib/ids";
 import { startPhoneReceiver, subscribePhone, getPhoneRoom } from "@/lib/phoneReceiver";
 import { friendlyNdiName, type NdiAdvert } from "@/lib/ndiNames";
+import {
+  isNdiWebcamLabel,
+  NDI_TOOLS_URL,
+  preferredCameraId,
+  sortCamerasForNdi,
+  type VideoInput,
+} from "@/lib/ndiCameras";
+import { listVideoInputs } from "@/lib/liveSources";
 
 interface DiscoverResponse {
   sources: NdiAdvert[];
@@ -12,13 +19,20 @@ interface DiscoverResponse {
   error?: string;
 }
 
+type Tab = "ndi" | "browser" | "other";
+
 export function NdiConnectDialog() {
+  const [tab, setTab] = useState<Tab>("ndi");
   const [url, setUrl] = useState("");
   const [room] = useState(() => getPhoneRoom() ?? (uid("cam").replace(/[^a-z0-9]/gi, "").slice(0, 14) || "camroom"));
   const [scan, setScan] = useState<DiscoverResponse | null>(null);
   const [scanning, setScanning] = useState(true);
-  const [status, setStatus] = useState("Waiting for a phone to join…");
+  const [status, setStatus] = useState("Waiting for a phone browser to join…");
   const [live, setLive] = useState(false);
+  const [cameras, setCameras] = useState<VideoInput[]>([]);
+  const [cameraId, setCameraId] = useState("");
+  const [cameraError, setCameraError] = useState("");
+  const [connecting, setConnecting] = useState(false);
 
   const localUrl = `http://127.0.0.1:4735/cam/${room}`;
   const lanUrls = lanJoinUrls(room, scan?.lan ?? []);
@@ -26,25 +40,53 @@ export function NdiConnectDialog() {
   const needsHttps = phoneUrlNeedsHttps(phoneUrl);
   const httpsPhoneUrl = phoneUrl.replace(/^http:\/\//i, "https://");
   const found = scan?.sources ?? [];
+  const sourceNames = found.map((s) => s.name);
+  const rankedCameras = useMemo(() => sortCamerasForNdi(cameras, sourceNames), [cameras, sourceNames]);
+  const ndiWebcams = rankedCameras.filter((c) => isNdiWebcamLabel(c.label));
+
+  const scanLan = (showBusy = true) => {
+    if (showBusy) setScanning(true);
+    void (window.watchout?.discoverNdi() ?? Promise.reject(new Error("Desktop API missing")))
+      .then((data: DiscoverResponse) => setScan(data))
+      .catch(() => setScan({ sources: [], lan: [], ok: false, error: "Scan failed" }))
+      .finally(() => setScanning(false));
+  };
+
+  const refreshCameras = () => {
+    void listVideoInputs()
+      .then((list) => {
+        setCameras(list);
+        setCameraError(list.length ? "" : "Windows did not list a camera. Allow camera access, then Refresh cameras.");
+      })
+      .catch((error) => {
+        setCameras([]);
+        setCameraError(error instanceof Error ? error.message : "Could not list cameras");
+      });
+  };
 
   useEffect(() => {
-    let cancelled = false;
-    void (window.watchout?.discoverNdi() ?? Promise.reject(new Error("Desktop API missing")))
-      .then((data: DiscoverResponse) => {
-        if (!cancelled) setScan(data);
-      })
-      .catch(() => {
-        if (!cancelled) setScan({ sources: [], lan: [], ok: false, error: "Scan failed" });
-      })
-      .finally(() => {
-        if (!cancelled) setScanning(false);
-      });
+    scanLan();
+    refreshCameras();
+    const devices = navigator.mediaDevices;
+    const onChange = () => refreshCameras();
+    devices?.addEventListener?.("devicechange", onChange);
+    const timer = window.setInterval(() => scanLan(false), 4000);
     return () => {
-      cancelled = true;
+      devices?.removeEventListener?.("devicechange", onChange);
+      window.clearInterval(timer);
     };
   }, []);
 
   useEffect(() => {
+    if (!rankedCameras.length) return;
+    setCameraId((current) => {
+      if (current && rankedCameras.some((c) => c.deviceId === current)) return current;
+      return preferredCameraId(rankedCameras, sourceNames) || rankedCameras[0].deviceId;
+    });
+  }, [rankedCameras, sourceNames]);
+
+  useEffect(() => {
+    if (tab !== "browser") return;
     const assetId = useApp.getState().ensureNdiAsset();
     if (!assetId) return;
     startPhoneReceiver(room, assetId);
@@ -52,43 +94,226 @@ export function NdiConnectDialog() {
       setStatus(message);
       setLive(isLive);
     });
-  }, [room]);
+  }, [room, tab]);
+
+  const bindCamera = async (deviceId: string) => {
+    const id = useApp.getState().ensureNdiAsset();
+    if (!id) return;
+    setConnecting(true);
+    setCameraError("");
+    try {
+      const ok = await useApp.getState().connectLiveSource(id, "camera", undefined, deviceId || undefined);
+      if (ok) useApp.getState().setDialog(null);
+      else setCameraError("Could not open that camera. Pick NDI Webcam Video, or allow camera access.");
+    } catch (error) {
+      setCameraError(error instanceof Error ? error.message : "Could not open that camera");
+    } finally {
+      setConnecting(false);
+    }
+  };
 
   return (
-    <div className="p-4">
+    <div className="max-h-[86vh] overflow-auto p-4">
       <div className="mb-2 text-sm font-semibold text-[#f5a623]">NDI / live input</div>
-      <p className="mb-3 text-[12px] leading-relaxed text-stone-400">
-        Chrome and Safari can list NDI names on the LAN, but they cannot decode native NewTek NDI — including NDI HX Camera.
-        Same Wi‑Fi is not enough. To put that phone on Stage, leave the NDI app and open the QR in the phone browser.
-      </p>
+      <div className="mb-3 flex flex-wrap gap-1 text-[11px]">
+        <TabBtn active={tab === "ndi"} onClick={() => setTab("ndi")}>
+          NDI Camera Pro
+        </TabBtn>
+        <TabBtn active={tab === "browser"} onClick={() => setTab("browser")}>
+          Phone browser QR
+        </TabBtn>
+        <TabBtn active={tab === "other"} onClick={() => setTab("other")}>
+          PC / URL
+        </TabBtn>
+      </div>
 
-      {found.length > 0 && (
-        <div className="mb-3 rounded border border-amber-700/70 bg-[#1a1408] p-2 text-[12px] leading-relaxed">
-          <div className="font-semibold text-[#f5a623]">
-            Found {found.map((s) => friendlyNdiName(s.name)).join(", ")}
-            {found.length === 1 && found[0].ip ? ` at ${found[0].ip}` : ""}
-          </div>
-          <p className="mt-1 text-stone-300">
-            That is an NDI advertisement, not a playable video in this browser. Close NDI HX Camera on the phone, then
-            scan the QR below in Chrome or Safari and tap Start. The feed lands on the NDI Program asset.
-          </p>
-        </div>
+      {tab === "ndi" && (
+        <NdiProTab
+          scanning={scanning}
+          found={found}
+          cameras={rankedCameras}
+          ndiWebcams={ndiWebcams}
+          cameraId={cameraId}
+          cameraError={cameraError}
+          connecting={connecting}
+          onCameraId={setCameraId}
+          onRefreshNdi={scanLan}
+          onRefreshCameras={refreshCameras}
+          onConnect={() => void bindCamera(cameraId)}
+        />
       )}
 
-      <div className="mb-3 rounded border border-[#333] bg-[#141414] p-2 text-[12px]">
-        <div className="mb-1 text-[10px] uppercase tracking-wider text-stone-500">LAN NDI advertisements</div>
-        {scanning && <div className="text-stone-500">Scanning mDNS (_ndi._tcp)…</div>}
+      {tab === "browser" && (
+        <BrowserTab
+          phoneUrl={phoneUrl}
+          localUrl={localUrl}
+          lanUrls={lanUrls}
+          needsHttps={needsHttps}
+          httpsPhoneUrl={httpsPhoneUrl}
+          status={status}
+          live={live}
+        />
+      )}
+
+      {tab === "other" && (
+        <OtherTab
+          url={url}
+          onUrl={setUrl}
+          onPcCamera={() => void bindCamera("")}
+        />
+      )}
+    </div>
+  );
+}
+
+function NdiProTab({
+  scanning,
+  found,
+  cameras,
+  ndiWebcams,
+  cameraId,
+  cameraError,
+  connecting,
+  onCameraId,
+  onRefreshNdi,
+  onRefreshCameras,
+  onConnect,
+}: {
+  scanning: boolean;
+  found: NdiAdvert[];
+  cameras: VideoInput[];
+  ndiWebcams: VideoInput[];
+  cameraId: string;
+  cameraError: string;
+  connecting: boolean;
+  onCameraId: (id: string) => void;
+  onRefreshNdi: () => void;
+  onRefreshCameras: () => void;
+  onConnect: () => void;
+}) {
+  return (
+    <div className="space-y-3 text-[12px] leading-relaxed">
+      <p className="rounded border border-amber-700/70 bg-[#1a1408] p-2 text-amber-100">
+        Do <span className="font-semibold">not</span> scan the QR inside{" "}
+        <span className="font-semibold">NDI Camera Pro</span>. That app is an NDI sender — it has no WatchOut join
+        scanner. Keep NDI Camera Pro open and streaming on the phone.
+      </p>
+
+      <section className="rounded border border-[#333] bg-[#141414] p-2">
+        <div className="mb-1 flex items-center justify-between gap-2">
+          <div className="text-[10px] uppercase tracking-wider text-stone-500">1. Phone NDI sources on this LAN</div>
+          <button className="rounded bg-[#333] px-2 py-0.5 text-[11px]" onClick={onRefreshNdi}>
+            {scanning ? "Scanning…" : "Scan again"}
+          </button>
+        </div>
+        {scanning && found.length === 0 && <div className="text-stone-500">Looking for _ndi._tcp advertisements…</div>}
         {!scanning && found.length === 0 && (
-          <div className="text-stone-500">
-            No NDI names seen from this computer. Guest Wi‑Fi often blocks multicast (AP isolation). Use Phone camera
-            below anyway — that path does not need NDI discovery.
+          <div className="text-stone-400">
+            No NDI name yet. Same Wi‑Fi (not Guest / AP isolation), NDI Camera Pro streaming, then Scan again.
           </div>
         )}
         {found.map((s) => (
-          <FoundSource key={`${s.name}-${s.ip ?? s.host}-${s.port}`} source={s} />
+          <div key={`${s.name}-${s.ip ?? s.host}-${s.port}`} className="border-t border-[#2a2a2a] py-1">
+            <div className="flex items-center justify-between gap-2">
+              <span className="truncate text-emerald-300" title={s.name}>
+                {friendlyNdiName(s.name)}
+              </span>
+              <span className="shrink-0 text-stone-500">{s.ip || s.host || "mDNS"}</span>
+            </div>
+            {friendlyNdiName(s.name) !== s.name && (
+              <div className="truncate text-[10px] text-stone-600">{s.name}</div>
+            )}
+          </div>
         ))}
-      </div>
+      </section>
 
+      <section className="rounded border border-[#333] bg-[#141414] p-2">
+        <div className="mb-1 text-[10px] uppercase tracking-wider text-stone-500">
+          2. NDI Webcam on this Windows PC (required)
+        </div>
+        <p className="mb-2 text-stone-400">
+          Chromium cannot decode native NDI. Install free{" "}
+          <button
+            className="text-[#f5a623] underline"
+            onClick={() => void window.watchout?.openExternal(NDI_TOOLS_URL)}
+          >
+            NDI Tools
+          </button>
+          , open <span className="text-stone-200">NDI Webcam Input</span>, and pick the phone source above. It then
+          appears as a camera here.
+        </p>
+        <div className="mb-2 flex flex-wrap gap-1">
+          <button className="rounded bg-[#333] px-2 py-0.5 text-[11px]" onClick={onRefreshCameras}>
+            Refresh cameras
+          </button>
+          <button
+            className="rounded bg-[#333] px-2 py-0.5 text-[11px]"
+            onClick={() => void window.watchout?.openExternal(NDI_TOOLS_URL)}
+          >
+            Open NDI Tools download
+          </button>
+        </div>
+        {ndiWebcams.length > 0 ? (
+          <div className="mb-2 text-emerald-400">Found {ndiWebcams.map((c) => c.label).join(", ")}</div>
+        ) : (
+          <div className="mb-2 text-amber-200">
+            No NDI Webcam device yet. After NDI Webcam Input is running and set to your phone, click Refresh cameras.
+          </div>
+        )}
+        <select
+          className="w-full rounded border border-[#444] bg-[#111] px-2 py-1 text-stone-200"
+          value={cameraId}
+          onChange={(e) => onCameraId(e.target.value)}
+        >
+          {!cameras.length && <option value="">No cameras listed</option>}
+          {cameras.map((c) => (
+            <option key={c.deviceId} value={c.deviceId}>
+              {isNdiWebcamLabel(c.label) ? `NDI · ${c.label}` : c.label}
+            </option>
+          ))}
+        </select>
+        {cameraError && <p className="mt-1 text-[11px] text-red-400">{cameraError}</p>}
+      </section>
+
+      <div className="flex justify-end gap-2">
+        <button className="px-3 py-1" onClick={() => useApp.getState().setDialog(null)}>
+          Close
+        </button>
+        <button
+          className="rounded bg-[#f5a623] px-3 py-1 text-black disabled:opacity-40"
+          disabled={!cameraId || connecting}
+          onClick={onConnect}
+        >
+          {connecting ? "Connecting…" : "Connect this camera"}
+        </button>
+      </div>
+    </div>
+  );
+}
+
+function BrowserTab({
+  phoneUrl,
+  localUrl,
+  lanUrls,
+  needsHttps,
+  httpsPhoneUrl,
+  status,
+  live,
+}: {
+  phoneUrl: string;
+  localUrl: string;
+  lanUrls: string[];
+  needsHttps: boolean;
+  httpsPhoneUrl: string;
+  status: string;
+  live: boolean;
+}) {
+  return (
+    <div>
+      <p className="mb-3 text-[12px] leading-relaxed text-stone-400">
+        This QR is only for <span className="text-stone-200">Chrome or Safari</span> on the phone — not NDI Camera Pro.
+        Close or leave the NDI app, open the phone browser, then scan.
+      </p>
       <div className="mb-3 grid grid-cols-[120px_1fr] gap-3 rounded border border-[#333] bg-[#141414] p-2">
         {/* eslint-disable-next-line @next/next/no-img-element */}
         <img
@@ -97,7 +322,7 @@ export function NdiConnectDialog() {
           src={`https://api.qrserver.com/v1/create-qr-code/?size=120x120&data=${encodeURIComponent(phoneUrl)}`}
         />
         <div className="min-w-0">
-          <div className="text-[10px] uppercase tracking-wider text-stone-500">Phone camera (works)</div>
+          <div className="text-[10px] uppercase tracking-wider text-stone-500">Phone browser (not NDI Camera Pro)</div>
           <div className={`text-[11px] ${live ? "text-emerald-400" : "text-stone-300"}`}>{status}</div>
           <div className="mt-1 break-all font-mono text-[11px] text-[#f5a623]">{phoneUrl}</div>
           {lanUrls.slice(1).map((u) => (
@@ -109,8 +334,7 @@ export function NdiConnectDialog() {
             <p className="mt-2 rounded border border-amber-800/80 bg-amber-950/40 p-1.5 text-[10px] leading-relaxed text-amber-100">
               Phone browsers block the camera on this http:// LAN address. On the Producer PC run{" "}
               <span className="font-mono">npm run dev:https</span>, then open{" "}
-              <span className="break-all font-mono text-[#f5a623]">{httpsPhoneUrl}</span> on the phone — not the NDI HX
-              app.
+              <span className="break-all font-mono text-[#f5a623]">{httpsPhoneUrl}</span> in Chrome/Safari.
             </p>
           )}
           <div className="mt-2 flex flex-wrap gap-1">
@@ -124,24 +348,30 @@ export function NdiConnectDialog() {
               Open here
             </a>
           </div>
-          {!needsHttps && (
-            <p className="mt-1 text-[10px] leading-relaxed text-stone-500">
-              Open the phone link in the phone&apos;s browser — not the NDI HX Camera app. &quot;Open here&quot; uses this
-              PC (localhost is allowed).
-            </p>
-          )}
         </div>
       </div>
+      <div className="flex justify-end">
+        <button className="px-3 py-1" onClick={() => useApp.getState().setDialog(null)}>
+          Close
+        </button>
+      </div>
+    </div>
+  );
+}
 
+function OtherTab({
+  url,
+  onUrl,
+  onPcCamera,
+}: {
+  url: string;
+  onUrl: (v: string) => void;
+  onPcCamera: () => void;
+}) {
+  return (
+    <div>
       <div className="flex gap-2">
-        <button
-          className="rounded bg-[#14532d] px-2 py-1 text-emerald-100"
-          onClick={() => {
-            const id = useApp.getState().ensureNdiAsset();
-            if (id) void useApp.getState().connectLiveSource(id, "camera");
-            useApp.getState().setDialog(null);
-          }}
-        >
+        <button className="rounded bg-[#14532d] px-2 py-1 text-emerald-100" onClick={onPcCamera}>
           This PC camera
         </button>
         <button
@@ -155,9 +385,15 @@ export function NdiConnectDialog() {
           Screen
         </button>
       </div>
-      <L label="HTTP stream URL">
-        <input value={url} placeholder="https://…/stream.m3u8 or .mp4" onChange={(e) => setUrl(e.target.value)} />
-      </L>
+      <label className="mt-3 block">
+        <div className="mb-1 text-stone-500">HTTP stream URL</div>
+        <input
+          className="w-full rounded border border-[#444] bg-[#111] px-2 py-1"
+          value={url}
+          placeholder="https://…/stream.m3u8 or .mp4"
+          onChange={(e) => onUrl(e.target.value)}
+        />
+      </label>
       <div className="mt-4 flex justify-end gap-2">
         <button className="px-3 py-1" onClick={() => useApp.getState().setDialog(null)}>
           Close
@@ -177,49 +413,22 @@ export function NdiConnectDialog() {
   );
 }
 
-function FoundSource({ source }: { source: NdiAdvert }) {
-  const [httpUrl, setHttpUrl] = useState("");
-  const label = friendlyNdiName(source.name);
-  const where = source.ip || source.host || "mDNS";
-
-  useEffect(() => {
-    if (!source.ip) return;
-    let cancelled = false;
-    void fetch(`/api/ndi/probe?ip=${encodeURIComponent(source.ip)}`, { cache: "no-store" })
-      .then((r) => r.json())
-      .then((data: { ok?: boolean; url?: string }) => {
-        if (!cancelled && data.ok && data.url) setHttpUrl(data.url);
-      })
-      .catch(() => undefined);
-    return () => {
-      cancelled = true;
-    };
-  }, [source.ip]);
-
+function TabBtn({
+  active,
+  onClick,
+  children,
+}: {
+  active: boolean;
+  onClick: () => void;
+  children: React.ReactNode;
+}) {
   return (
-    <div className="border-t border-[#2a2a2a] py-1">
-      <div className="flex items-center justify-between gap-2">
-        <span className="truncate text-emerald-300" title={source.name}>
-          {label}
-        </span>
-        <span className="shrink-0 text-stone-500">{where}</span>
-      </div>
-      {label !== source.name && <div className="truncate text-[10px] text-stone-600">{source.name}</div>}
-      {httpUrl ? (
-        <button
-          className="mt-1 rounded bg-[#14532d] px-2 py-0.5 text-[11px] text-emerald-100"
-          onClick={() => {
-            const id = useApp.getState().ensureNdiAsset();
-            if (id) void useApp.getState().connectLiveSource(id, "url", httpUrl);
-            useApp.getState().setDialog(null);
-          }}
-        >
-          Connect HTTP {httpUrl}
-        </button>
-      ) : (
-        <div className="text-[10px] text-stone-500">NDI only — use the phone QR, not this advertisement.</div>
-      )}
-    </div>
+    <button
+      className={`rounded px-2 py-1 ${active ? "bg-[#f5a623] text-black" : "bg-[#333] text-stone-300"}`}
+      onClick={onClick}
+    >
+      {children}
+    </button>
   );
 }
 
@@ -237,13 +446,4 @@ function lanJoinUrls(room: string, lan: { address: string }[]) {
   const urls = lan.map((n) => `http://${n.address}:${port}/cam/${room}`);
   urls.unshift(`http://127.0.0.1:${port}/cam/${room}`);
   return [...new Set(urls)];
-}
-
-function L({ label, children }: { label: string; children: React.ReactNode }) {
-  return (
-    <label className="mt-2 block">
-      <div className="mb-1 text-stone-500">{label}</div>
-      {children}
-    </label>
-  );
 }

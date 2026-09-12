@@ -57,7 +57,7 @@ export function AssetsWindow() {
           className="rounded bg-[#14532d] px-2 py-0.5 text-emerald-100"
           onClick={() => useApp.getState().setDialog("ndiSource")}
         >
-          Phone / URL
+          NDI Camera Pro
         </button>
         <span className="ml-auto text-stone-600">Asset Manager · {show.assetManager}</span>
         <input

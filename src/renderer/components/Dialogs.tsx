@@ -14,7 +14,7 @@ export function Dialogs() {
         useApp.getState().setDialog(null);
       }}
     >
-      <div className={`rounded border border-[#444] bg-[#1c1c1c] shadow-2xl ${dialog === "ndiSource" ? "w-[560px]" : "w-[420px]"}`} onClick={(e) => e.stopPropagation()}>
+      <div className={`rounded border border-[#444] bg-[#1c1c1c] shadow-2xl ${dialog === "ndiSource" ? "w-[640px]" : "w-[420px]"}`} onClick={(e) => e.stopPropagation()}>
         {dialog === "displayGrid" && <GridDialog />}
         {dialog === "about" && <AboutDialog />}
         {dialog === "openShow" && <OpenDialog />}
@@ -61,7 +61,7 @@ function AboutDialog() {
   return (
     <div className="p-5">
       <div className="text-2xl font-black tracking-[0.2em] text-[#f5a623]">WATCHOUT</div>
-      <div className="mt-1 text-stone-400">WATCHOUT Producer 7.8 — desktop edition</div>
+      <div className="mt-1 text-stone-400">WATCHOUT Producer 7.8.5 — desktop edition</div>
       <p className="mt-3 text-[12px] leading-relaxed text-stone-400">
         Multi-display show composer with Stage, Timeline, Assets, Devices, Nodes, Variables and Cue control.
         Runner outputs are native fullscreen windows bound to OS monitors. ffmpeg builds VP9 proxies for

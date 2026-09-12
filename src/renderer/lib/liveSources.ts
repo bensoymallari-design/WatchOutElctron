@@ -55,9 +55,28 @@ function attachStream(assetId: string, stream: MediaStream, kind: LiveKind) {
   return video;
 }
 
-export async function connectCamera(assetId: string) {
+export async function listVideoInputs() {
+  if (!navigator.mediaDevices?.enumerateDevices) return [] as { deviceId: string; label: string }[];
+  try {
+    const probe = await navigator.mediaDevices.getUserMedia({ video: true, audio: false });
+    probe.getTracks().forEach((track) => track.stop());
+  } catch {
+    /* permission denied or no camera — labels may stay empty */
+  }
+  const devices = await navigator.mediaDevices.enumerateDevices();
+  return devices
+    .filter((d) => d.kind === "videoinput" && d.deviceId)
+    .map((d) => ({ deviceId: d.deviceId, label: d.label.trim() || "Camera" }));
+}
+
+export async function connectCamera(assetId: string, deviceId?: string) {
+  const video: MediaTrackConstraints = {
+    width: { ideal: 1920 },
+    height: { ideal: 1080 },
+  };
+  if (deviceId) video.deviceId = { exact: deviceId };
   const stream = await navigator.mediaDevices.getUserMedia({
-    video: { width: { ideal: 1920 }, height: { ideal: 1080 } },
+    video,
     audio: false,
   });
   return attachStream(assetId, stream, "camera");
