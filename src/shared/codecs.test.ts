@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { mediaKind, needsHqRebuild, needsPlaybackProxy, proxyCpuUsed, proxyFfmpegArgs } from "./codecs";
+import { mediaKind, needsHqRebuild, needsPlaybackProxy, proxyCpuUsed, proxyFfmpegArgs, proxyFfmpegCli, collapseImportPaths, siblingWebmPath, scaledProxySize } from "./codecs";
 
 test("classifies common media extensions", () => {
   assert.equal(mediaKind("wall.png"), "image");
@@ -32,7 +32,35 @@ test("video proxy keeps native pixels, VP9+Opus, and the first audio track", () 
   assert.ok(args.includes("libvpx-vp9"));
   assert.ok(args.includes("-crf"));
   assert.equal(args.includes("realtime"), false);
+  assert.ok(args.includes("scale=3840:2160"));
+});
+
+test("unknown size still even-pads with trunc", () => {
+  const args = proxyFfmpegArgs("video", "in.mov", "out.webm");
   assert.ok(args.includes("scale=trunc(iw/2)*2:trunc(ih/2)*2"));
+});
+
+test("laptop prepare downscales 4K to 1080p-wide", () => {
+  const size = scaledProxySize(3840, 2160, 1920);
+  assert.deepEqual(size, { width: 1920, height: 1080 });
+  const args = proxyFfmpegArgs("video", "in.mp4", "in.webm", { width: 3840, height: 2160, maxWidth: 1920 });
+  assert.ok(args.includes("scale=1920:1080"));
+});
+
+test("sidecar webm sits next to the master; picker drops the duplicate webm", () => {
+  assert.equal(siblingWebmPath("C:\\Shows\\clip.mp4"), "C:\\Shows\\clip.webm");
+  assert.equal(siblingWebmPath("/shows/loop.webm"), "/shows/loop.webm");
+  assert.deepEqual(collapseImportPaths(["/shows/clip.mp4", "/shows/clip.webm", "/shows/sting.wav"]), [
+    "/shows/clip.mp4",
+    "/shows/sting.wav",
+  ]);
+});
+
+test("outside ffmpeg command matches the in-app VP9+Opus recipe", () => {
+  const cmd = proxyFfmpegCli("show.mp4");
+  assert.ok(cmd.includes("libvpx-vp9"));
+  assert.ok(cmd.includes("libopus"));
+  assert.ok(cmd.endsWith("show.webm"));
 });
 
 test("4K proxies use a faster cpu-used than HD, never the old realtime 8", () => {

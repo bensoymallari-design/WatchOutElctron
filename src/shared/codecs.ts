@@ -79,6 +79,60 @@ export function needsHqRebuild(asset: {
 export interface ProxySize {
   width: number;
   height: number;
+  maxWidth?: number;
+}
+
+export type PrepareMode = "native" | "laptop";
+
+/** Same-folder VP9 file users can bake overnight and import without waiting. */
+export function siblingWebmPath(filePath: string) {
+  const ext = extOf(filePath);
+  if (ext === "webm") return filePath;
+  const slash = Math.max(filePath.lastIndexOf("/"), filePath.lastIndexOf("\\"));
+  const dot = filePath.lastIndexOf(".");
+  if (dot > slash) return `${filePath.slice(0, dot)}.webm`;
+  return `${filePath}.webm`;
+}
+
+export function preparedSidecarCandidates(src: string, dest = src) {
+  return [...new Set([siblingWebmPath(src), siblingWebmPath(dest)])];
+}
+
+/** Drop a .webm from the picker when the matching MP4/MOV is also selected. */
+export function collapseImportPaths(paths: string[]) {
+  return paths.filter((p) => {
+    if (extOf(p) !== "webm") return true;
+    return !paths.some((other) => other !== p && siblingWebmPath(other) === p);
+  });
+}
+
+export function scaledProxySize(width: number, height: number, maxWidth?: number): ProxySize {
+  let w = Math.max(0, width);
+  let h = Math.max(0, height);
+  if (maxWidth && w > maxWidth) {
+    h = Math.round((h * maxWidth) / w) || 2;
+    w = maxWidth;
+  }
+  return {
+    width: w > 0 ? Math.max(2, Math.floor(w / 2) * 2) : 0,
+    height: h > 0 ? Math.max(2, Math.floor(h / 2) * 2) : 0,
+  };
+}
+
+export function proxyScaleFilter(size?: ProxySize) {
+  const fitted = scaledProxySize(size?.width ?? 0, size?.height ?? 0, size?.maxWidth);
+  if (fitted.width > 0 && fitted.height > 0) return `scale=${fitted.width}:${fitted.height}`;
+  return "scale=trunc(iw/2)*2:trunc(ih/2)*2";
+}
+
+function quoteFfmpegArg(value: string) {
+  if (!/[ \t"]/.test(value)) return value;
+  return `"${value.replace(/"/g, '\\"')}"`;
+}
+
+/** Command to bake a Chromium-safe WebM next to the master, outside Producer. */
+export function proxyFfmpegCli(src: string, dest = siblingWebmPath(src), size?: ProxySize) {
+  return ["ffmpeg", ...proxyFfmpegArgs("video", src, dest, size)].map(quoteFfmpegArg).join(" ");
 }
 
 /** Chromium-safe WebM proxy. Keeps native pixel size and the first audio track as Opus. */
@@ -86,7 +140,8 @@ export function proxyFfmpegArgs(kind: ProxyKind, src: string, dest: string, size
   if (kind === "audio") {
     return ["-y", "-i", src, "-vn", "-c:a", "libopus", "-b:a", "192k", "-ar", "48000", dest];
   }
-  const cpu = String(proxyCpuUsed(size?.width ?? 1920, size?.height ?? 1080));
+  const cpuSize = scaledProxySize(size?.width || 1920, size?.height || 1080, size?.maxWidth);
+  const cpu = String(proxyCpuUsed(cpuSize.width || 1920, cpuSize.height || 1080));
   const maps = kind === "video-silent" ? ["-map", "0:v:0", "-an"] : ["-map", "0:v:0", "-map", "0:a:0?"];
   const audio =
     kind === "video-silent"
@@ -107,7 +162,7 @@ export function proxyFfmpegArgs(kind: ProxyKind, src: string, dest: string, size
     "-pix_fmt",
     "yuv420p",
     "-vf",
-    "scale=trunc(iw/2)*2:trunc(ih/2)*2",
+    proxyScaleFilter(size),
     ...audio,
     dest,
   ];

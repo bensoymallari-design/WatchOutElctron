@@ -341,4 +341,5 @@ export type DialogKind =
   | "find"
   | "insertTime"
   | "connectDirector"
-  | "ndiSource";
+  | "ndiSource"
+  | "prepareMedia";

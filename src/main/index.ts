@@ -2,7 +2,7 @@ import { app, BrowserWindow, ipcMain, powerSaveBlocker, session, shell, Menu } f
 import { existsSync } from "node:fs";
 import { join } from "node:path";
 import { handleMediaProtocol, registerMediaScheme } from "./protocol";
-import { importMediaFiles, pickMediaFiles, ffmpegAvailable, rebuildMediaAssets } from "./media";
+import { importMediaFiles, pickMediaFiles, pickPrepareMediaFiles, preparePlaybackFiles, ffmpegAvailable, rebuildMediaAssets } from "./media";
 import {
   closeAllOutputs,
   closeOutput,
@@ -147,6 +147,10 @@ function bindIpc() {
     return importMediaFiles(paths, mediaLog, mediaUpdated);
   });
   ipcMain.handle("media:ffmpeg", () => ffmpegAvailable());
+  ipcMain.handle("media:prepare", async (_e, mode: "native" | "laptop") => {
+    const paths = await pickPrepareMediaFiles(mainWindow);
+    return preparePlaybackFiles(paths, mode === "laptop" ? "laptop" : "native", mediaLog);
+  });
   ipcMain.handle("media:rebuild", async (_e, assets: Parameters<typeof rebuildMediaAssets>[0]) => {
     return rebuildMediaAssets(assets, (message, level) => {
       mainWindow?.webContents.send("log", { message, level: level ?? "info" });

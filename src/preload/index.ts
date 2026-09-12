@@ -37,6 +37,8 @@ const api = {
   importPaths: (paths: string[]) => ipcRenderer.invoke("media:importPaths", paths) as Promise<ImportedMedia[]>,
   rebuildMedia: (assets: RebuildMediaRequest[]) =>
     ipcRenderer.invoke("media:rebuild", assets) as Promise<ImportedMedia[]>,
+  prepareMedia: (mode: "native" | "laptop") =>
+    ipcRenderer.invoke("media:prepare", mode) as Promise<{ dest: string; skipped: boolean }[]>,
   ffmpegReady: () => ipcRenderer.invoke("media:ffmpeg") as Promise<boolean>,
   discoverNdi: () => ipcRenderer.invoke("ndi:discover") as Promise<NdiScan>,
   gpuInfo: () => ipcRenderer.invoke("app:gpu") as Promise<string>,

@@ -1,6 +1,7 @@
 
 import { useApp } from "@/store/appStore";
 import { NdiConnectDialog } from "@/components/NdiConnectDialog";
+import { proxyFfmpegCli } from "../../shared/codecs";
 import { useState } from "react";
 
 export function Dialogs() {
@@ -14,11 +15,12 @@ export function Dialogs() {
         useApp.getState().setDialog(null);
       }}
     >
-      <div className={`rounded border border-[#444] bg-[#1c1c1c] shadow-2xl ${dialog === "ndiSource" ? "w-[640px]" : "w-[420px]"}`} onClick={(e) => e.stopPropagation()}>
+      <div className={`rounded border border-[#444] bg-[#1c1c1c] shadow-2xl ${dialog === "ndiSource" || dialog === "prepareMedia" ? "w-[640px]" : "w-[420px]"}`} onClick={(e) => e.stopPropagation()}>
         {dialog === "displayGrid" && <GridDialog />}
         {dialog === "about" && <AboutDialog />}
         {dialog === "openShow" && <OpenDialog />}
         {dialog === "ndiSource" && <NdiConnectDialog />}
+        {dialog === "prepareMedia" && <PrepareMediaDialog />}
       </div>
     </div>
   );
@@ -61,11 +63,11 @@ function AboutDialog() {
   return (
     <div className="p-5">
       <div className="text-2xl font-black tracking-[0.2em] text-[#f5a623]">WATCHOUT</div>
-      <div className="mt-1 text-stone-400">WATCHOUT Producer 7.8.8 — desktop edition</div>
+      <div className="mt-1 text-stone-400">WATCHOUT Producer 7.8.9 — desktop edition</div>
       <p className="mt-3 text-[12px] leading-relaxed text-stone-400">
         Multi-display show composer with Stage, Timeline, Assets, Devices, Nodes, Variables and Cue control.
-        Runner outputs are native fullscreen windows bound to OS monitors. ffmpeg builds VP9 proxies for
-        HAP, ProRes, H.264 and other codecs Chromium cannot decode.
+        Runner outputs are native fullscreen windows bound to OS monitors. H.264 / HAP / ProRes need a VP9+Opus
+        WebM. Use File → Prepare videos overnight, then import — or let ffmpeg build the proxy after Import.
       </p>
       <div className="mt-4 text-right">
         <button className="rounded bg-[#f5a623] px-3 py-1 text-black" onClick={() => useApp.getState().setDialog(null)}>
@@ -84,6 +86,44 @@ function OpenDialog() {
       <div className="mt-4 text-right">
         <button className="rounded bg-[#f5a623] px-3 py-1 text-black" onClick={() => useApp.getState().setDialog(null)}>
           OK
+        </button>
+      </div>
+    </div>
+  );
+}
+
+function PrepareMediaDialog() {
+  const example = proxyFfmpegCli("clip.mp4");
+  return (
+    <div className="p-5">
+      <div className="mb-2 text-sm font-semibold text-[#f5a623]">Prepare videos for Producer</div>
+      <p className="text-[12px] leading-relaxed text-stone-300">
+        Stock Electron cannot play H.264 MP4 / ProRes / HAP. Convert to VP9+Opus WebM <em>before</em> the show.
+        Producer writes <span className="font-mono text-stone-100">clip.webm</span> next to{" "}
+        <span className="font-mono text-stone-100">clip.mp4</span>. Then Import the MP4 (it uses the WebM) or import the
+        WebM itself — playback starts immediately, no background transcode.
+      </p>
+      <p className="mt-2 text-[12px] leading-relaxed text-stone-400">
+        Full size is for the show PC / LED wall. 1080p is smoother on this laptop. 4K VP9 still costs CPU if you play
+        the full-size file here.
+      </p>
+      <div className="mt-3 rounded bg-black/40 p-2 font-mono text-[10px] leading-snug text-stone-400">{example}</div>
+      <p className="mt-1 text-[11px] text-stone-500">Same recipe if you run ffmpeg yourself in Git Bash / PowerShell. HandBrake: WebM, VP9, Opus.</p>
+      <div className="mt-4 flex flex-wrap justify-end gap-2">
+        <button className="px-3 py-1 text-stone-300" onClick={() => useApp.getState().setDialog(null)}>
+          Close
+        </button>
+        <button
+          className="rounded bg-[#333] px-3 py-1 text-stone-100"
+          onClick={() => void useApp.getState().preparePlaybackMedia("laptop")}
+        >
+          Prepare 1080p (laptop)
+        </button>
+        <button
+          className="rounded bg-[#f5a623] px-3 py-1 text-black"
+          onClick={() => void useApp.getState().preparePlaybackMedia("native")}
+        >
+          Prepare full size
         </button>
       </div>
     </div>
