@@ -23,6 +23,12 @@ export function formatMs(ms: number) {
   return `${pad(h)}:${pad(m)}:${pad(s)}.${pad(milli, 3)}`;
 }
 
+/** Clock plus seconds, so cue duration can be matched to the file. */
+export function formatPlayTime(ms: number) {
+  const abs = Math.max(0, Math.round(ms));
+  return `${formatMs(abs)}  ·  ${(abs / 1000).toFixed(3)} s  ·  ${abs} ms`;
+}
+
 export function parseTimecode(value: string) {
   const parts = value.trim().split(":");
   if (parts.length === 1) return Number(parts[0]) * 1000 || 0;

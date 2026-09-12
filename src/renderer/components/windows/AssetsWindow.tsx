@@ -1,7 +1,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { useApp } from "@/store/appStore";
-import { formatMs } from "@/lib/time";
+import { formatPlayTime } from "@/lib/time";
 import { getLiveKind, getLiveVideo, subscribeLive } from "@/lib/liveSources";
 import { drawProcedural } from "@/lib/procedural";
 import { FolderPlus, Image as ImageIcon, Film, Music, Radio, Box, Trash2 } from "lucide-react";
@@ -124,7 +124,7 @@ export function AssetsWindow() {
               <div className="min-w-0 flex-1">
                 <div className="truncate">{a.name}</div>
                 <div className="text-[10px] text-stone-500">
-                  {a.kind} · {a.codec} · {a.width ? `${a.width}×${a.height}` : ""} · {formatMs(a.duration)}
+                  {a.kind} · {a.codec} · {a.width ? `${a.width}×${a.height}` : ""} · {formatPlayTime(a.duration)}
                   {!a.optimized && a.kind === "video" ? " · building HQ" : ""}
                 </div>
               </div>

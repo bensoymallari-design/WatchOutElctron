@@ -1,6 +1,6 @@
 
 import { useApp, useActiveTimeline } from "@/store/appStore";
-import { formatMs } from "@/lib/time";
+import { formatMs, formatPlayTime, parseTimecode } from "@/lib/time";
 import { TWEEN_META } from "@/lib/tweens";
 import { cueHasConflict } from "@/lib/timeline";
 import { EASING_OPTIONS } from "@/lib/easing";
@@ -31,7 +31,7 @@ export function PropertiesWindow() {
           <Read label="Kind" value={a.kind} />
           <Read label="Codec" value={a.codec} />
           <Read label="Size" value={`${a.width}×${a.height}`} />
-          <Read label="Duration" value={formatMs(a.duration)} />
+          <Read label="Duration" value={formatPlayTime(a.duration)} />
           <Read label="Notes" value={a.notes || "—"} />
           <div className="mt-2">
             <button
@@ -99,13 +99,56 @@ export function PropertiesWindow() {
 function CueProps({ cue }: { cue: Cue }) {
   const u = (partial: Partial<Cue>) => useApp.getState().updateCue(cue.id, partial);
   const tl = useActiveTimeline();
+  const show = useApp((s) => s.show);
+  const asset = cue.assetId ? show?.assets.find((a) => a.id === cue.assetId) : undefined;
+  const timedFile = !!asset && (asset.kind === "video" || asset.kind === "audio");
+  const mediaMs = timedFile && asset && asset.duration > 0 ? Math.round(asset.duration) : 0;
   const conflict = tl ? cueHasConflict(cue, tl.cues) : false;
+  const cueDiffers = mediaMs > 0 && Math.round(cue.duration) !== mediaMs;
+
+  const applyMediaLength = () => {
+    if (!mediaMs) return;
+    u({ duration: mediaMs });
+    if (tl && cue.start + mediaMs > tl.duration) {
+      useApp.getState().updateTimeline(tl.id, { duration: Math.ceil((cue.start + mediaMs + 1000) / 1000) * 1000 });
+    }
+    useApp.getState().log(`Cue length set to original playing time ${formatPlayTime(mediaMs)}`);
+  };
+
   return (
     <Panel title={`${cue.type} cue`}>
       <Field label="Name" value={cue.name} onChange={(v) => u({ name: v })} />
       <Read label="ID" value={cue.id} />
+      {asset && (
+        <>
+          <Read label="Media file" value={asset.name} />
+          {timedFile ? (
+            mediaMs ? (
+              <PlayTimeBlock ms={mediaMs} />
+            ) : (
+              <Read label="Original playing time" value="Unknown — wait for import / Rebuild HQ" />
+            )
+          ) : asset.kind === "image" ? (
+            <Read label="Still duration" value={formatPlayTime(asset.duration)} />
+          ) : (
+            <Read label="Live source" value="No file length — set cue duration for how long it stays on the timeline" />
+          )}
+        </>
+      )}
       <Num label="Start ms" value={Math.round(cue.start)} onChange={(v) => u({ start: v })} />
-      <Num label="Duration ms" value={Math.round(cue.duration)} onChange={(v) => u({ duration: v })} />
+      <ClockField label="Cue duration" ms={cue.duration} onCommit={(v) => u({ duration: v })} />
+      <div className="pl-[100px] text-[10px] leading-snug text-stone-500">Type 00:02:05.040 or 125.04 seconds, then click away</div>
+      <Num label="Cue ms" value={Math.round(cue.duration)} onChange={(v) => u({ duration: Math.max(40, v) })} />
+      {cueDiffers && (
+        <div className="pl-[100px] text-[10px] leading-snug text-amber-200/80">Cue is {formatMs(cue.duration)}; file is {formatMs(mediaMs)}</div>
+      )}
+      {mediaMs > 0 && (
+        <div className="py-1">
+          <button className="rounded bg-[#14532d] px-2 py-0.5 text-[11px] text-emerald-100" onClick={applyMediaLength}>
+            Use original playing time
+          </button>
+        </div>
+      )}
       <Check label="Enabled" checked={cue.enabled} onChange={(v) => u({ enabled: v })} />
       <Check label="Free running" checked={cue.freeRunning} onChange={(v) => u({ freeRunning: v })} />
       {conflict && (
@@ -236,6 +279,42 @@ function Panel({ title, children }: { title: string; children: React.ReactNode }
       <div className="mb-2 text-[11px] font-semibold uppercase tracking-[0.18em] text-[#f5a623]">{title}</div>
       <div className="space-y-0.5 text-[12px]">{children}</div>
     </div>
+  );
+}
+
+function PlayTimeBlock({ ms }: { ms: number }) {
+  return (
+    <div className="my-1 rounded border border-[#2a2a2a] bg-[#121212] px-2 py-1.5">
+      <div className="text-[10px] uppercase tracking-wider text-[#f5a623]">Original playing time</div>
+      <div className="font-mono text-[15px] text-stone-100">{formatMs(ms)}</div>
+      <div className="text-[11px] text-stone-400">{(ms / 1000).toFixed(3)} seconds · {ms} ms</div>
+      <div className="mt-0.5 text-[10px] text-stone-500">Length of the imported file. Copy this into Cue duration, or press the button below.</div>
+    </div>
+  );
+}
+
+function ClockField({ label, ms, onCommit }: { label: string; ms: number; onCommit: (v: number) => void }) {
+  const [text, setText] = useState(formatMs(ms));
+  useEffect(() => {
+    setText(formatMs(ms));
+  }, [ms]);
+  const commit = () => {
+    const parsed = parseTimecode(text);
+    if (Number.isFinite(parsed) && parsed >= 40) onCommit(Math.round(parsed));
+    else setText(formatMs(ms));
+  };
+  return (
+    <label className="grid grid-cols-[92px_1fr] items-center gap-2 py-0.5">
+      <span className="text-stone-500">{label}</span>
+      <input
+        value={text}
+        onChange={(e) => setText(e.target.value)}
+        onBlur={commit}
+        onKeyDown={(e) => {
+          if (e.key === "Enter") (e.target as HTMLInputElement).blur();
+        }}
+      />
+    </label>
   );
 }
 
