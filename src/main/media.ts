@@ -119,10 +119,21 @@ async function transcodeProxy(
   size: { width: number; height: number },
   keepAudio: boolean,
   onProgress?: (msg: string) => void,
+  durationMs = 0,
 ) {
+  let lastEmit = 0;
   const onChunk = (chunk: string) => {
     const time = chunk.match(/time=(\d+:\d+:\d+\.\d+)/);
-    if (time) onProgress?.(`Transcoding ${basename(src)}  ${time[1]}`);
+    if (!time) return;
+    const now = Date.now();
+    if (now - lastEmit < 2500) return;
+    lastEmit = now;
+    const speed = chunk.match(/speed=\s*([0-9.]+)x/);
+    const played = ffmpegClockSeconds(time[1]);
+    const total = durationMs / 1000;
+    const pct = total > 0 ? ` ${Math.min(99, Math.round((played / total) * 100))}%` : "";
+    const rate = speed ? ` ${speed[1]}×` : "";
+    onProgress?.(`Transcoding ${basename(src)}${pct}  ${time[1]}${rate} — wait for Proxy ready, then press Space`);
   };
   const tryKind = async (proxyKind: ProxyKind) => run(ffmpegBin, proxyFfmpegArgs(proxyKind, src, dest, size), onChunk);
   let result = await tryKind(kind);
@@ -139,6 +150,12 @@ async function transcodeProxy(
     result = await tryKind("video-silent");
   }
   if (result.code !== 0) throw new Error(result.stderr.slice(-400) || "ffmpeg proxy failed");
+}
+
+function ffmpegClockSeconds(clock: string) {
+  const parts = clock.split(":").map(Number);
+  if (parts.length !== 3 || parts.some((n) => !Number.isFinite(n))) return 0;
+  return parts[0] * 3600 + parts[1] * 60 + parts[2];
 }
 
 function colorFor(kind: ImportedMedia["kind"]) {
@@ -173,7 +190,7 @@ async function buildProxy(
   const proxy = proxyDest(root, id);
   const label = `${info.width || "?"}×${info.height || "?"} ${info.codec}`;
   onLog?.(`Building HQ VP9+Opus ${label} for ${basename(destFile)} — keeps file pixels, may take a few minutes`);
-  await transcodeProxy(destFile, proxy, kind, { width: info.width, height: info.height }, info.hasAudio, (msg) => onLog?.(msg));
+  await transcodeProxy(destFile, proxy, kind, { width: info.width, height: info.height }, info.hasAudio, (msg) => onLog?.(msg), info.duration);
   if (info.hasAudio) {
     const built = await probeFile(proxy);
     if (!built.hasAudio) {
