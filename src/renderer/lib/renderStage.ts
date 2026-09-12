@@ -123,6 +123,48 @@ export function cameraForDisplay(
   };
 }
 
+function drawDisplayFrames(
+  ctx: CanvasRenderingContext2D,
+  displays: Display[],
+  selectedIds: string[],
+  highlightDisplayId: string | null | undefined,
+  zoom: number,
+) {
+  for (const d of displays) {
+    if (!d.enabled) continue;
+    ctx.save();
+    ctx.translate(d.x + d.width / 2, d.y + d.height / 2);
+    ctx.rotate((d.rotation * Math.PI) / 180);
+    ctx.translate(-d.width / 2, -d.height / 2);
+    ctx.fillStyle = "rgba(8,8,8,0.92)";
+    ctx.fillRect(0, 0, d.width, d.height);
+    if (highlightDisplayId === d.id) {
+      ctx.fillStyle = "rgba(245,158,11,0.16)";
+      ctx.fillRect(0, 0, d.width, d.height);
+    }
+    ctx.strokeStyle = selectedIds.includes(d.id) || highlightDisplayId === d.id ? "#f59e0b" : d.virtual ? "#38bdf8" : "#525252";
+    ctx.lineWidth = (selectedIds.includes(d.id) ? 3 : 1.5) / zoom;
+    ctx.strokeRect(0, 0, d.width, d.height);
+    ctx.fillStyle = "rgba(0,0,0,0.45)";
+    ctx.fillRect(0, 0, d.width, Math.min(d.height, 32 / zoom + 8));
+    ctx.fillStyle = "#fafafa";
+    ctx.font = `${16 / zoom}px ui-sans-serif, system-ui`;
+    ctx.textAlign = "left";
+    ctx.textBaseline = "top";
+    ctx.fillText(
+      `${d.name}  ${d.width}×${d.height}  ${d.outputType}:${d.channel}`,
+      8 / zoom,
+      6 / zoom,
+    );
+    if (d.blend) {
+      ctx.fillStyle = "rgba(245,158,11,0.12)";
+      ctx.fillRect(0, 0, d.blendWidth, d.height);
+      ctx.fillRect(d.width - d.blendWidth, 0, d.blendWidth, d.height);
+    }
+    ctx.restore();
+  }
+}
+
 export function drawStage(options: {
   canvas: HTMLCanvasElement;
   displays: Display[];
@@ -203,6 +245,10 @@ export function drawStage(options: {
     ctx.moveTo(0, -span);
     ctx.lineTo(0, span);
     ctx.stroke();
+  }
+
+  if (!clipDisplay) {
+    drawDisplayFrames(ctx, displays, selectedIds, highlightDisplayId, camera.zoom);
   }
 
   const assetById = new Map(assets.map((a) => [a.id, a]));
@@ -291,42 +337,6 @@ export function drawStage(options: {
       ctx.stroke();
     }
     ctx.restore();
-  }
-
-  if (!clipDisplay) {
-    for (const d of displays) {
-      if (!d.enabled) continue;
-      ctx.save();
-      ctx.translate(d.x + d.width / 2, d.y + d.height / 2);
-      ctx.rotate((d.rotation * Math.PI) / 180);
-      ctx.translate(-d.width / 2, -d.height / 2);
-      if (highlightDisplayId === d.id) {
-        ctx.fillStyle = "rgba(245,158,11,0.16)";
-        ctx.fillRect(0, 0, d.width, d.height);
-      }
-      ctx.strokeStyle = selectedIds.includes(d.id) || highlightDisplayId === d.id ? "#f59e0b" : d.virtual ? "#38bdf8" : "#e7e5e4";
-      ctx.lineWidth = (selectedIds.includes(d.id) ? 3 : 1.5) / camera.zoom;
-      ctx.strokeRect(0, 0, d.width, d.height);
-      ctx.fillStyle = "rgba(0,0,0,0.35)";
-      const labelH = 28 / camera.zoom;
-      ctx.fillRect(0, 0, d.width, Math.min(d.height, 32 / camera.zoom + 8));
-      ctx.fillStyle = "#fafafa";
-      ctx.font = `${16 / camera.zoom}px ui-sans-serif, system-ui`;
-      ctx.textAlign = "left";
-      ctx.textBaseline = "top";
-      ctx.fillText(
-        `${d.name}  ${d.width}×${d.height}  ${d.outputType}:${d.channel}`,
-        8 / camera.zoom,
-        6 / camera.zoom,
-      );
-      if (d.blend) {
-        ctx.fillStyle = "rgba(245,158,11,0.12)";
-        ctx.fillRect(0, 0, d.blendWidth, d.height);
-        ctx.fillRect(d.width - d.blendWidth, 0, d.blendWidth, d.height);
-      }
-      void labelH;
-      ctx.restore();
-    }
   }
 
   ctx.restore();
