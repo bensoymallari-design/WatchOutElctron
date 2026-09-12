@@ -20,7 +20,7 @@ export function AssetsWindow() {
   const preview = show.assets.find((a) => a.id === selected[0]);
   void liveTick;
   const busy = logs.find((l) =>
-    /transcoding|building hq|copying |hq webm is building|ffmpeg\/ffprobe not found/i.test(l.message),
+    /preparing|transcoding|building hq|copying |hq webm is building|ffmpeg\/ffprobe not found/i.test(l.message),
   );
   const selectedAsset = preview;
 
@@ -35,6 +35,9 @@ export function AssetsWindow() {
           onClick={() => void useApp.getState().rebuildStaleMedia()}
         >
           Rebuild HQ
+        </button>
+        <button className="rounded bg-[#333] px-2 py-0.5 text-stone-200" onClick={() => useApp.getState().setDialog("prepareMedia")}>
+          Prepare videos
         </button>
         <button
           className="rounded bg-[#5b1d1d] px-2 py-0.5 text-red-100 disabled:opacity-40"

@@ -79,6 +79,7 @@ interface AppActions {
   saveDownload: () => void;
   importDesktopAssets: () => Promise<void>;
   applyImportedMedia: (media: import("../../shared/ipc").ImportedMedia) => void;
+  preparePlaybackMedia: (mode: "native" | "laptop") => Promise<void>;
   rebuildStaleMedia: () => Promise<void>;
   applyMonitorSize: (screenId?: string) => Promise<void>;
   mapScreensToDisplays: (includeLaptop?: boolean) => Promise<void>;
@@ -1119,7 +1120,32 @@ export const useApp = create<AppState & AppActions>((set, get) => ({
       start += media.duration || 5000;
     }
     get().log(
-      `Imported ${loaded.length} asset${loaded.length === 1 ? "" : "s"} onto Stage/Timeline. Press Space. If the picture is a still, HQ WebM is still building.`,
+      `Imported ${loaded.length} asset${loaded.length === 1 ? "" : "s"} onto Stage/Timeline. Press Space. If the picture is a still, HQ WebM is still building — or File → Prepare videos first so import plays immediately.`,
+    );
+  },
+
+  preparePlaybackMedia: async (mode) => {
+    if (!window.watchout?.prepareMedia) {
+      get().log("Prepare videos needs the desktop app (not a browser tab).", "warn");
+      return;
+    }
+    get().setDialog(null);
+    get().setMenu(null);
+    get().log(
+      mode === "laptop"
+        ? "Pick MP4/MOV files. Producer writes a 1080p .webm next to each one (smoother on this laptop)."
+        : "Pick MP4/MOV files. Producer writes a full-size VP9 .webm next to each one. Import after Ready to import.",
+    );
+    const result = await window.watchout.prepareMedia(mode);
+    if (!result?.length) {
+      get().log("No files prepared.");
+      return;
+    }
+    const wrote = result.filter((r) => !r.skipped).length;
+    get().log(
+      wrote
+        ? `Prepared ${wrote} WebM file(s). Assets → Import the original MP4 or the new .webm — playback starts immediately.`
+        : "Those files already had a prepared WebM. Assets → Import them.",
     );
   },
 

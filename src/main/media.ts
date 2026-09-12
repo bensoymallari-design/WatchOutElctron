@@ -4,7 +4,7 @@ import { existsSync } from "node:fs";
 import { basename, extname, join } from "node:path";
 import { pathToFileURL } from "node:url";
 import { app, dialog, type BrowserWindow } from "electron";
-import { mediaKind, needsHqRebuild, needsPlaybackProxy, PROXY_VERSION, proxyFfmpegArgs, proxyNote, type ProxyKind } from "../shared/codecs";
+import { collapseImportPaths, mediaKind, needsHqRebuild, needsPlaybackProxy, preparedSidecarCandidates, PROXY_VERSION, proxyFfmpegArgs, proxyNote, scaledProxySize, siblingWebmPath, type PrepareMode, type ProxyKind } from "../shared/codecs";
 import { formatBytes, largeMediaNote, shouldBuildFullProxy, shouldCopyOnImport } from "../shared/mediaPolicy";
 import type { ImportedMedia, RebuildMediaRequest } from "../shared/ipc";
 import { ffmpegCandidatePaths, ffprobeCandidatePaths } from "./ffmpegBins";
@@ -116,10 +116,11 @@ async function transcodeProxy(
   src: string,
   dest: string,
   kind: "video" | "audio",
-  size: { width: number; height: number },
+  size: { width: number; height: number; maxWidth?: number },
   keepAudio: boolean,
   onProgress?: (msg: string) => void,
   durationMs = 0,
+  verb = "Transcoding",
 ) {
   let lastEmit = 0;
   const onChunk = (chunk: string) => {
@@ -133,7 +134,7 @@ async function transcodeProxy(
     const total = durationMs / 1000;
     const pct = total > 0 ? ` ${Math.min(99, Math.round((played / total) * 100))}%` : "";
     const rate = speed ? ` ${speed[1]}×` : "";
-    onProgress?.(`Transcoding ${basename(src)}${pct}  ${time[1]}${rate} — wait for Proxy ready, then press Space`);
+    onProgress?.(`${verb} ${basename(src)}${pct}  ${time[1]}${rate}`);
   };
   const tryKind = async (proxyKind: ProxyKind) => run(ffmpegBin, proxyFfmpegArgs(proxyKind, src, dest, size), onChunk);
   let result = await tryKind(kind);
@@ -189,7 +190,7 @@ async function buildProxy(
   const root = await mediaRoot();
   const proxy = proxyDest(root, id);
   const label = `${info.width || "?"}×${info.height || "?"} ${info.codec}`;
-  onLog?.(`Building HQ VP9+Opus ${label} for ${basename(destFile)} — keeps file pixels, may take a few minutes`);
+  onLog?.(`Building HQ VP9+Opus ${label} for ${basename(destFile)} — keeps file pixels, may take a few minutes. Wait for Proxy ready, then press Space`);
   await transcodeProxy(destFile, proxy, kind, { width: info.width, height: info.height }, info.hasAudio, (msg) => onLog?.(msg), info.duration);
   if (info.hasAudio) {
     const built = await probeFile(proxy);
@@ -212,6 +213,15 @@ async function extractPoster(id: string, src: string) {
   return mediaUrl(poster);
 }
 
+async function findPreparedWebm(src: string, dest: string) {
+  for (const candidate of preparedSidecarCandidates(src, dest)) {
+    if (!existsSync(candidate)) continue;
+    const info = await probeFile(candidate);
+    if (!needsPlaybackProxy(info.codec, candidate)) return { path: candidate, info };
+  }
+  return null;
+}
+
 export async function importMediaFiles(
   paths: string[],
   onLog?: (message: string, level?: "info" | "warn" | "error") => void,
@@ -223,14 +233,14 @@ export async function importMediaFiles(
   const canFfmpeg = await ffmpegAvailable();
   if (!canFfmpeg) {
     onLog?.(
-      "ffmpeg/ffprobe not found — H.264 MP4 will import but stay black until a WebM proxy exists. Reinstall this Producer (it bundles ffmpeg) or install ffmpeg on PATH.",
+      "ffmpeg/ffprobe not found — H.264 MP4 will import but stay black until a WebM proxy exists. Reinstall this Producer (it bundles ffmpeg) or install ffmpeg on PATH. Or File → Prepare videos first.",
       "warn",
     );
   } else {
     onLog?.(`Using ffmpeg at ${ffmpegBin}`);
   }
 
-  for (const src of paths) {
+  for (const src of collapseImportPaths(paths)) {
     const id = `asset_${Date.now().toString(36)}${(assetSeq++).toString(36)}`;
     const ext = extname(src) || ".bin";
     const bytes = (await stat(src)).size;
@@ -245,12 +255,32 @@ export async function importMediaFiles(
     }
     const kind = mediaKind(src);
     const info = await probeFile(dest);
-    const url = mediaUrl(dest);
-    let optimized = !needsPlaybackProxy(info.codec, dest);
+    let playPath = dest;
+    let playInfo = info;
+    let prepared = false;
+    let proxyPath: string | undefined;
+    if (kind !== "image" && needsPlaybackProxy(info.codec, dest)) {
+      const ready = await findPreparedWebm(src, dest);
+      if (ready) {
+        playPath = ready.path;
+        playInfo = ready.info;
+        prepared = true;
+        proxyPath = ready.path;
+        onLog?.(
+          `Using prepared WebM next to ${basename(src)} (${ready.info.width}×${ready.info.height}) — import will play immediately`,
+        );
+      }
+    }
+    const url = mediaUrl(playPath);
+    let optimized = prepared || !needsPlaybackProxy(info.codec, dest);
     let proxyVersion: number | undefined;
     const canProxy =
-      kind !== "image" && needsPlaybackProxy(info.codec, dest) && canFfmpeg && shouldBuildFullProxy(bytes, info.width, info.height);
-    if (kind !== "image" && !needsPlaybackProxy(info.codec, dest)) {
+      kind !== "image" &&
+      needsPlaybackProxy(info.codec, dest) &&
+      !prepared &&
+      canFfmpeg &&
+      shouldBuildFullProxy(bytes, info.width, info.height);
+    if (kind !== "image" && (prepared || !needsPlaybackProxy(info.codec, dest))) {
       proxyVersion = PROXY_VERSION;
     } else if (kind !== "image" && !shouldBuildFullProxy(bytes, info.width, info.height)) {
       optimized = true;
@@ -266,18 +296,21 @@ export async function importMediaFiles(
       id,
       name: basename(src).replace(/\.[^.]+$/, ""),
       kind,
-      width: info.width,
-      height: info.height,
+      width: playInfo.width || info.width,
+      height: playInfo.height || info.height,
       duration: info.duration,
       fps: info.fps,
       url,
-      codec: info.codec,
+      codec: prepared ? playInfo.codec : info.codec,
       color: colorFor(kind),
       optimized,
-      notes: canProxy
-        ? `${basename(src)} · ${sizeNote} · still showing first frame — building VP9+Opus WebM so Electron can play H.264`
-        : `${basename(src)} · ${sizeNote} · ${proxyNote(info.codec, false, info.width, info.height)}${silent ? " · no audio track" : ""}`,
+      notes: prepared
+        ? `${basename(src)} · ${sizeNote} · prepared WebM ${playInfo.width}×${playInfo.height} · plays now`
+        : canProxy
+          ? `${basename(src)} · ${sizeNote} · still showing first frame — building VP9+Opus WebM so Electron can play H.264`
+          : `${basename(src)} · ${sizeNote} · ${proxyNote(info.codec, false, info.width, info.height)}${silent ? " · no audio track" : ""}`,
       originalPath: dest,
+      proxyPath,
       proxyVersion,
       bytes,
       linked,
@@ -409,4 +442,83 @@ export async function pickMediaFiles(win: BrowserWindow | null) {
   });
   if (result.canceled) return [] as string[];
   return result.filePaths;
+}
+
+export async function pickPrepareMediaFiles(win: BrowserWindow | null) {
+  const result = await dialog.showOpenDialog(win ?? (undefined as unknown as BrowserWindow), {
+    title: "Prepare videos for Producer (writes a .webm next to each file)",
+    properties: ["openFile", "multiSelections"],
+    filters: [
+      { name: "Video", extensions: ["mp4", "mov", "mkv", "avi", "mxf", "m4v", "mts", "mpg", "mpeg"] },
+      { name: "All files", extensions: ["*"] },
+    ],
+  });
+  if (result.canceled) return [] as string[];
+  return result.filePaths;
+}
+
+export async function preparePlaybackFiles(
+  paths: string[],
+  mode: PrepareMode,
+  onLog?: (message: string, level?: "info" | "warn" | "error") => void,
+): Promise<{ dest: string; skipped: boolean }[]> {
+  const canFfmpeg = await ffmpegAvailable();
+  if (!canFfmpeg) {
+    onLog?.(
+      "Cannot prepare videos — ffmpeg not found. Reinstall this Producer (it bundles ffmpeg) or install ffmpeg on PATH.",
+      "error",
+    );
+    return [];
+  }
+  const maxWidth = mode === "laptop" ? 1920 : undefined;
+  const out: { dest: string; skipped: boolean }[] = [];
+  onLog?.(
+    mode === "laptop"
+      ? `Preparing ${paths.length} file(s) as 1080p VP9+Opus WebM (smoother on a laptop). Leave this running.`
+      : `Preparing ${paths.length} file(s) as full-size VP9+Opus WebM. Leave this running — large 4K files can take a while.`,
+  );
+  for (const src of paths) {
+    const kind = mediaKind(src);
+    if (kind !== "video" && kind !== "audio") {
+      onLog?.(`Skipping ${basename(src)} — not a video/audio file`, "warn");
+      continue;
+    }
+    const dest = siblingWebmPath(src);
+    if (dest === src) {
+      const already = await probeFile(src);
+      if (!needsPlaybackProxy(already.codec, src)) {
+        onLog?.(`${basename(src)} is already a Chromium WebM — import it as-is`);
+        out.push({ dest, skipped: true });
+        continue;
+      }
+    }
+    const info = await probeFile(src);
+    if (existsSync(dest) && dest !== src) {
+      const built = await probeFile(dest);
+      const srcStat = await stat(src);
+      const destStat = await stat(dest);
+      if (!needsPlaybackProxy(built.codec, dest) && destStat.mtimeMs >= srcStat.mtimeMs) {
+        onLog?.(`Already prepared: ${basename(dest)} (${built.width}×${built.height})`);
+        out.push({ dest, skipped: true });
+        continue;
+      }
+    }
+    const size = { ...scaledProxySize(info.width, info.height, maxWidth), maxWidth };
+    try {
+      onLog?.(`Preparing ${basename(src)} → ${basename(dest)} (${size.width || "?"}×${size.height || "?"})`);
+      await transcodeProxy(src, dest, kind, size, info.hasAudio, (msg) => onLog?.(msg), info.duration, "Preparing");
+      const built = await probeFile(dest);
+      if (info.hasAudio && !built.hasAudio) {
+        throw new Error(`Prepared ${basename(dest)} lost the soundtrack`);
+      }
+      onLog?.(`Ready to import: ${dest} (${built.width}×${built.height}${built.hasAudio ? " + audio" : ""})`);
+      out.push({ dest, skipped: false });
+    } catch (error) {
+      onLog?.(error instanceof Error ? error.message : `Prepare failed for ${basename(src)}`, "error");
+    }
+  }
+  if (out.length) {
+    onLog?.(`Prepare finished. Import the .webm, or import the original MP4 — Producer will use the WebM sitting next to it.`);
+  }
+  return out;
 }

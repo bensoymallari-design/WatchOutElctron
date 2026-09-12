@@ -37,7 +37,7 @@ export function MenuBar() {
   return (
     <div className="relative z-[1000] flex h-8 shrink-0 items-center overflow-visible border-b border-black bg-[#2a2a2a] px-1 text-[12px]" data-wo-menu>
       <div className="mr-3 px-2 text-[11px] font-black tracking-[0.28em] text-[#f5a623]">
-        WATCHOUT <span className="ml-1 font-semibold tracking-normal text-stone-200">7.8.8</span>
+        WATCHOUT <span className="ml-1 font-semibold tracking-normal text-stone-200">7.8.9</span>
       </div>
       {MENUS.map((name) => (
         <MenuSlot
@@ -214,6 +214,8 @@ function FileMenu({ fileRef }: { fileRef: React.RefObject<HTMLInputElement | nul
       <Item label="Save As / Export…" shortcut="Ctrl+Shift+S" onClick={() => a().saveDownload()} />
       <Item label="Show Properties" onClick={() => { a().clearSelection(); a().focusWindow("properties"); a().setMenu(null); }} />
       <Sep />
+      <Item label="Prepare videos for Producer…" onClick={() => { a().setDialog("prepareMedia"); a().setMenu(null); }} />
+      <Sep />
       <Item label="Quit to Start Page" onClick={() => a().quitToWelcome()} />
     </>
   );
@@ -356,6 +358,12 @@ function HelpMenu() {
   const show = useApp((s) => s.show);
   return (
     <>
+      <Item
+        label="Prepare videos for Producer…"
+        onClick={() => {
+          a().setDialog("prepareMedia");
+        }}
+      />
       <Item
         label="Documentation"
         onClick={() => void window.watchout?.openExternal("https://docs.dataton.com/watchout-7-new/watchout/getting-started/welcome-to-watchout-7.html")}
