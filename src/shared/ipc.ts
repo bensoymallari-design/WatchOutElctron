@@ -27,6 +27,8 @@ export interface ImportedMedia {
   originalPath: string;
   proxyPath?: string;
   proxyVersion?: number;
+  bytes?: number;
+  linked?: boolean;
 }
 
 export interface RebuildMediaRequest {
@@ -39,6 +41,8 @@ export interface RebuildMediaRequest {
   codec?: string;
   width?: number;
   height?: number;
+  bytes?: number;
+  linked?: boolean;
 }
 
 export interface RecentShow {

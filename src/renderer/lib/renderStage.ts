@@ -31,7 +31,7 @@ export function getVideo(
     v.muted = true;
     v.loop = true;
     v.playsInline = true;
-    v.preload = "auto";
+    v.preload = "metadata";
     v.crossOrigin = "anonymous";
     v.src = url;
     videoCache.set(id, v);

@@ -1175,6 +1175,9 @@ export const useApp = create<AppState & AppActions>((set, get) => ({
           originalPath: a.originalPath,
           proxyPath: a.proxyPath,
           proxyVersion: a.proxyVersion,
+          bytes: a.bytes,
+          width: a.width,
+          height: a.height,
         }),
     );
     if (!stale.length) return;
@@ -1190,6 +1193,8 @@ export const useApp = create<AppState & AppActions>((set, get) => ({
         codec: a.codec,
         width: a.width,
         height: a.height,
+        bytes: a.bytes,
+        linked: a.linked,
       })),
     );
     if (!updated.length) {

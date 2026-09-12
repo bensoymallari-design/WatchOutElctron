@@ -2,6 +2,8 @@ import { BrowserWindow, screen } from "electron";
 import type { ClockPayload, OpenOutputOptions, OutputScreen } from "../shared/ipc";
 
 const outputs = new Map<string, BrowserWindow>();
+const lastOpts = new Map<string, OpenOutputOptions>();
+const relaunching = new Set<string>();
 let lastShow: unknown = null;
 let lastClock: ClockPayload | null = null;
 let preload = "";
@@ -121,16 +123,38 @@ export async function openOutput(opts: OpenOutputOptions) {
     win.moveTop();
   });
   win.on("closed", () => {
-    outputs.delete(opts.displayId);
+    if (outputs.get(opts.displayId) === win) outputs.delete(opts.displayId);
     onChange?.();
   });
   outputs.set(opts.displayId, win);
+  lastOpts.set(opts.displayId, opts);
+  win.webContents.on("render-process-gone", (_e, details) => {
+    if (details.reason === "clean-exit") return;
+    void relaunchOutput(opts.displayId);
+  });
   onChange?.();
   if (lastShow) win.webContents.send("output:show", lastShow);
   if (lastClock) win.webContents.send("output:clock", lastClock);
 }
 
+async function relaunchOutput(displayId: string) {
+  if (relaunching.has(displayId)) return;
+  const opts = lastOpts.get(displayId);
+  if (!opts) return;
+  relaunching.add(displayId);
+  try {
+    const old = outputs.get(displayId);
+    if (old && !old.isDestroyed()) old.destroy();
+    outputs.delete(displayId);
+    await new Promise((resolve) => setTimeout(resolve, 400));
+    await openOutput(opts);
+  } finally {
+    relaunching.delete(displayId);
+  }
+}
+
 export function closeOutput(displayId: string) {
+  lastOpts.delete(displayId);
   const win = outputs.get(displayId);
   if (win && !win.isDestroyed()) win.close();
   outputs.delete(displayId);

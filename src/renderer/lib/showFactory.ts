@@ -37,7 +37,7 @@ export function emptyTimeline(name = "Main Timeline"): Timeline {
     duration: 120000,
     playback: "stop",
     playhead: 0,
-    loop: false,
+    loop: true,
     enabled: true,
     rate: 1,
     layers,
@@ -131,7 +131,7 @@ export function localNode(partial?: Partial<ShowNode>): ShowNode {
     gpuLoad: 22,
     ram: 41,
     disk: 12,
-    version: "7.8.3",
+    version: "7.8.4",
     ...partial,
   };
 }
