@@ -27,7 +27,7 @@ export function Dialogs() {
 }
 
 function GridDialog() {
-  const [cols, setCols] = useState(3);
+  const [cols, setCols] = useState(4);
   const [rows, setRows] = useState(1);
   const [w, setW] = useState(1920);
   const [h, setH] = useState(1080);
@@ -35,6 +35,9 @@ function GridDialog() {
   return (
     <div className="p-4">
       <div className="mb-3 text-sm font-semibold text-[#f5a623]">Create Display Grid</div>
+      <p className="mb-2 text-[11px] leading-relaxed text-stone-400">
+        Example: 4 columns × 1 row × 1920×1080 = one 7680×1080 wall. Import a clip, it snaps across all four. Output all, then Space — same playhead, each controller shows its slice.
+      </p>
       <div className="grid grid-cols-2 gap-2 text-[12px]">
         <L label="Columns"><input type="number" value={cols} onChange={(e) => setCols(+e.target.value)} /></L>
         <L label="Rows"><input type="number" value={rows} onChange={(e) => setRows(+e.target.value)} /></L>

@@ -41,6 +41,22 @@ export function hitCue(
   return undefined;
 }
 
+export function wallRect(displays: Display[]): StageRect | null {
+  const live = displays.filter((d) => d.enabled);
+  if (!live.length) return null;
+  const x = Math.min(...live.map((d) => d.x));
+  const y = Math.min(...live.map((d) => d.y));
+  const right = Math.max(...live.map((d) => d.x + d.width));
+  const bottom = Math.max(...live.map((d) => d.y + d.height));
+  return { x, y, w: right - x, h: bottom - y };
+}
+
+export function wallAsBox(displays: Display[]) {
+  const wall = wallRect(displays);
+  if (!wall) return null;
+  return { x: wall.x, y: wall.y, width: wall.w, height: wall.h };
+}
+
 export type FitMode = "cover" | "contain";
 
 export function fitTransform(

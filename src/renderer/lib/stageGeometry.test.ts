@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { displayForCue, displayMoveGuides, fitTransform, hitDisplay, snapRect, snapValue } from "./stageGeometry";
+import { displayForCue, displayMoveGuides, fitTransform, hitDisplay, snapRect, snapValue, wallRect } from "./stageGeometry";
 
 const display = { id: "d1", name: "Display 1", x: 0, y: 0, z: 0, width: 1920, height: 1080, rotation: 0, outputType: "GPU" as const, channel: 1, nodeId: "local", enabled: true, blend: false, blendWidth: 128, virtual: false };
 
@@ -55,4 +55,30 @@ test("dragging a display snaps flush to its neighbor and to the origin", () => {
   const snapped = snapRect({ x: moving.x, y: moving.y, w: moving.width, h: moving.height }, guides.x, guides.y, 16);
   assert.equal(snapped.x, 1920);
   assert.equal(snapped.y, 0);
+});
+
+test("wall is the bounding box of every enabled controller", () => {
+  const row = [0, 1, 2, 3].map((i) => ({ ...display, id: `d${i}`, x: i * 1920, y: 0, channel: i + 1 }));
+  assert.deepEqual(wallRect(row), { x: 0, y: 0, w: 7680, h: 1080 });
+  const grid = [
+    { ...display, id: "a", x: 0, y: 0 },
+    { ...display, id: "b", x: 1920, y: 0 },
+    { ...display, id: "c", x: 0, y: 1080 },
+    { ...display, id: "d", x: 1920, y: 1080 },
+  ];
+  assert.deepEqual(wallRect(grid), { x: 0, y: 0, w: 3840, h: 2160 });
+});
+
+test("fit cover maps one clip across a 4-wide 1080p wall", () => {
+  const wall = { x: 0, y: 0, width: 7680, height: 1080 };
+  const fit = fitTransform({ width: 1920, height: 1080 }, wall, "cover");
+  assert.equal(fit.position.x, 0);
+  assert.equal(fit.position.y, 0);
+  assert.deepEqual(fit.scale, { x: 400, y: 100 });
+});
+
+test("fit cover maps one clip across a 2×2 1080p wall", () => {
+  const wall = { x: 0, y: 0, width: 3840, height: 2160 };
+  const fit = fitTransform({ width: 1920, height: 1080 }, wall, "cover");
+  assert.deepEqual(fit.scale, { x: 200, y: 200 });
 });

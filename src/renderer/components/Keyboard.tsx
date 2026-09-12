@@ -139,6 +139,10 @@ export function Keyboard() {
         e.preventDefault();
         a.frameDisplays();
       }
+      if (mod && e.shiftKey && e.key.toLowerCase() === "w") {
+        e.preventDefault();
+        a.fitSelectedToWall("cover");
+      }
       if (mod && e.shiftKey && e.key.toLowerCase() === "f") {
         e.preventDefault();
         a.fitSelectedToDisplay("cover");

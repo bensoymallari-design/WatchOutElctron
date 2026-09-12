@@ -18,7 +18,7 @@ import { makeTween } from "@/lib/tweens";
 import { cueEnd, findCrossfadePair, purgeAssets, removeTimelines } from "@/lib/timeline";
 import { connectCamera, connectScreen, connectUrl, disconnectLive } from "@/lib/liveSources";
 import { downloadShow, loadLayouts, loadRecents, loadShowLocal, saveLayouts, saveShowLocal, type RecentShow } from "@/lib/persistence";
-import { fitTransform, displayForCue, type FitMode } from "@/lib/stageGeometry";
+import { fitTransform, displayForCue, wallAsBox, type FitMode } from "@/lib/stageGeometry";
 import { listScreens, openDisplayOutput, preferredOutputScreen } from "@/lib/displayOutput";
 import { layoutDisplaysOnScreens, screenForDisplay } from "@/lib/screenAssign";
 import { needsHqRebuild } from "../../shared/codecs";
@@ -119,6 +119,7 @@ interface AppActions {
   addCueType: (type: Cue["type"]) => void;
   updateCue: (id: string, partial: Partial<Cue>) => void;
   fitSelectedToDisplay: (mode?: FitMode) => void;
+  fitSelectedToWall: (mode?: FitMode) => void;
   outputSelectedDisplay: () => Promise<void>;
   deleteSelected: () => void;
   duplicateSelected: () => void;
@@ -679,6 +680,13 @@ export const useApp = create<AppState & AppActions>((set, get) => ({
           }
         } else if (placement && placement.x != null && placement.y != null) {
           position = { x: placement.x, y: placement.y, z: 0 };
+        } else {
+          const wall = wallAsBox(show.displays);
+          if (wall) {
+            const fit = fitTransform(asset, wall, "cover");
+            position = fit.position;
+            scale = fit.scale;
+          }
         }
         const cue = emptyCue({
           name: asset.name,
@@ -715,7 +723,14 @@ export const useApp = create<AppState & AppActions>((set, get) => ({
       }),
     );
     if (created) get().select({ kind: "cue", ids: [created] });
-    get().log(placement?.displayId ? "Added media cue snapped to display" : "Added media cue");
+    const n = get().show?.displays.filter((d) => d.enabled).length ?? 0;
+    get().log(
+      placement?.displayId
+        ? "Added media cue snapped to that display"
+        : n > 1
+          ? `Added media cue snapped across ${n} controllers — Output all, then Space. Same clock on every slice.`
+          : "Added media cue",
+    );
   },
 
   fitSelectedToDisplay: (mode = "cover") => {
@@ -744,6 +759,34 @@ export const useApp = create<AppState & AppActions>((set, get) => ({
       }),
     );
     get().log(mode === "contain" ? "Fitted cue inside display" : "Snapped cue to display pixels");
+  },
+
+  fitSelectedToWall: (mode = "cover") => {
+    set((s) =>
+      patchShow(s, (show) => {
+        const cueId = s.selection.kind === "cue" ? s.selection.ids[0] : undefined;
+        const tl = activeTimeline(show, s.activeTimelineId);
+        const cue =
+          (cueId ? show.timelines.flatMap((t) => t.cues).find((c) => c.id === cueId) : undefined) ??
+          tl?.cues.find((c) => c.type === "media" && c.enabled && c.assetId);
+        if (!cue?.assetId) return show;
+        const asset = show.assets.find((a) => a.id === cue.assetId);
+        const wall = wallAsBox(show.displays);
+        if (!asset || !wall) return show;
+        const fit = fitTransform(asset, wall, mode);
+        return {
+          ...show,
+          timelines: show.timelines.map((t) => ({
+            ...t,
+            cues: t.cues.map((c) => (c.id === cue.id ? { ...c, position: fit.position, scale: fit.scale } : c)),
+          })),
+        };
+      }),
+    );
+    const n = get().show?.displays.filter((d) => d.enabled).length ?? 0;
+    get().log(
+      `Snapped cue across ${n} controller${n === 1 ? "" : "s"} (${mode === "contain" ? "inside wall" : "fill wall"}). Output all — one clock, one picture.`,
+    );
   },
 
   outputSelectedDisplay: async () => {
@@ -1112,11 +1155,10 @@ export const useApp = create<AppState & AppActions>((set, get) => ({
     const loaded = await window.watchout?.pickMedia();
     if (!loaded?.length) return;
     set((s) => patchShow(s, (show) => ({ ...show, assets: [...show.assets, ...loaded.map((m) => ({ ...m, folderId: null }))] })));
-    const displayId = get().show?.displays[0]?.id;
     const tl = get().show ? activeTimeline(get().show!, get().activeTimelineId) : null;
     let start = tl?.playhead ?? 0;
     for (const media of loaded) {
-      get().addCueFromAsset(media.id, undefined, start, displayId ? { displayId } : undefined);
+      get().addCueFromAsset(media.id, undefined, start);
       start += media.duration || 5000;
     }
     get().log(
@@ -1170,11 +1212,10 @@ export const useApp = create<AppState & AppActions>((set, get) => ({
       const loaded = await window.watchout.importPaths(paths);
       set((s) => patchShow(s, (show) => ({ ...show, assets: [...show.assets, ...loaded.map((m) => ({ ...m, folderId: null }))] })));
       get().log(`Imported ${loaded.length} asset${loaded.length === 1 ? "" : "s"} onto Stage/Timeline`);
-      const displayId = get().show?.displays[0]?.id;
       const tl = get().show ? activeTimeline(get().show!, get().activeTimelineId) : null;
       let start = tl?.playhead ?? 0;
       for (const media of loaded) {
-        get().addCueFromAsset(media.id, undefined, start, displayId ? { displayId } : undefined);
+        get().addCueFromAsset(media.id, undefined, start);
         start += media.duration || 5000;
       }
       return;
