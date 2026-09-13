@@ -214,7 +214,8 @@ function AssetPreview({ asset }: { asset?: Asset }) {
       ctx.fillRect(0, 0, canvas.width, canvas.height);
       if (live && isLiveReady(asset.id)) ctx.drawImage(live, 0, 0, canvas.width, canvas.height);
       else if (asset.kind === "ndi" || asset.kind === "capture" || asset.url.startsWith("procedural:")) {
-        const kind = asset.url.startsWith("procedural:") ? asset.url.slice("procedural:".length) : "ndi";
+        const waiting = !!getLiveKind(asset.id) && !isLiveReady(asset.id);
+        const kind = asset.url.startsWith("procedural:") ? asset.url.slice("procedural:".length) : waiting ? "ndi-wait" : "ndi";
         drawProcedural(ctx, kind, canvas.width, canvas.height, performance.now());
       }
       raf = requestAnimationFrame(paint);

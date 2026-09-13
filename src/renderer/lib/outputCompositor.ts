@@ -1,6 +1,6 @@
 import type { Asset, Show } from "@/types/show";
 import { collectStageCues } from "@/lib/stageCues";
-import { getLiveVideo, isLiveReady } from "@/lib/liveSources";
+import { getLiveKind, getLiveVideo, isLiveReady } from "@/lib/liveSources";
 import { drawProcedural } from "@/lib/procedural";
 import { applyAudioSink } from "@/lib/audioSink";
 import { videoPreload } from "../../shared/mediaPolicy";
@@ -147,7 +147,6 @@ export function syncOutputFrame(host: HTMLElement, show: Show, displayId: string
         media.muted = true;
       }
     } else if (media instanceof HTMLCanvasElement && asset) {
-      const kind = asset.url.startsWith("procedural:") ? asset.url.slice("procedural:".length) : "ndi";
       const ctx = media.getContext("2d");
       if (ctx) {
         if (media.width !== 1280) {
@@ -156,7 +155,11 @@ export function syncOutputFrame(host: HTMLElement, show: Show, displayId: string
         }
         const live = getLiveVideo(asset.id);
         if (live && isLiveReady(asset.id)) ctx.drawImage(live, 0, 0, media.width, media.height);
-        else drawProcedural(ctx, kind, media.width, media.height, now);
+        else {
+          const waiting = !!getLiveKind(asset.id) && !isLiveReady(asset.id);
+          const kind = asset.url.startsWith("procedural:") ? asset.url.slice("procedural:".length) : waiting ? "ndi-wait" : "ndi";
+          drawProcedural(ctx, kind, media.width, media.height, now);
+        }
       }
     } else if (media instanceof HTMLImageElement && asset?.url && media.src !== asset.url) {
       media.src = asset.url;

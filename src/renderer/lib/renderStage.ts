@@ -1,7 +1,7 @@
 import { videoPreload } from "../../shared/mediaPolicy";
 import type { EvaluatedCue } from "@/lib/tweens";
 import type { Asset, Display } from "@/types/show";
-import { getLiveVideo, isLiveReady } from "@/lib/liveSources";
+import { getLiveKind, getLiveVideo, isLiveReady } from "@/lib/liveSources";
 import { drawProcedural } from "@/lib/procedural";
 
 const imageCache = new Map<string, HTMLImageElement>();
@@ -93,7 +93,8 @@ function sourceFor(
   const live = getLiveVideo(asset.id);
   if (live && isLiveReady(asset.id)) return live;
   if (asset.kind === "ndi" || asset.kind === "capture") {
-    return procCanvas("ndi", timeMs);
+    const waiting = !!getLiveKind(asset.id) && !isLiveReady(asset.id);
+    return procCanvas(waiting ? "ndi-wait" : "ndi", timeMs);
   }
   if (asset.url.startsWith("procedural:")) {
     return procCanvas(asset.url.slice("procedural:".length), timeMs);

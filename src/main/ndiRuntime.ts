@@ -160,8 +160,12 @@ function loadApi(): NdiApi | null {
     const recv_destroy = lib.func("void NDIlib_recv_destroy(void *p_instance)");
     const recv_capture = (tryFunc(
       lib,
-      "int NDIlib_recv_capture_v3(void *p_instance, NDIlib_video_frame_v2_t *p_video_data, void *p_audio_data, void *p_metadata, uint32_t timeout_in_ms)",
+      "int NDIlib_recv_capture_v3(void *p_instance, _Out_ NDIlib_video_frame_v2_t *p_video_data, void *p_audio_data, void *p_metadata, uint32_t timeout_in_ms)",
     ) ??
+      tryFunc(
+        lib,
+        "int NDIlib_recv_capture_v2(void *p_instance, _Out_ NDIlib_video_frame_v2_t *p_video_data, void *p_audio_data, void *p_metadata, uint32_t timeout_in_ms)",
+      ) ??
       lib.func(
         "int NDIlib_recv_capture_v2(void *p_instance, NDIlib_video_frame_v2_t *p_video_data, void *p_audio_data, void *p_metadata, uint32_t timeout_in_ms)",
       )) as NdiApi["recv_capture"];
@@ -238,6 +242,40 @@ export function listSdkNdiSources(waitMs = 200): NdiAdvert[] {
   }
 }
 
+function openRecv(src: { p_ndi_name: string; p_url_address: string }) {
+  const loaded = api;
+  if (!loaded) return null;
+  // SDK: BGRX_BGRA = 0, UYVY_BGRA = 1. We want converted BGRA frames.
+  const COLOR_BGRX_BGRA = 0;
+  const BANDWIDTH_HIGHEST = 100;
+  let recv: unknown = null;
+  try {
+    recv = loaded.recv_create({
+      source_to_connect_to: src,
+      color_format: COLOR_BGRX_BGRA,
+      bandwidth: BANDWIDTH_HIGHEST,
+      allow_video_fields: true,
+      p_ndi_recv_name: "WatchJhon",
+    });
+  } catch {
+    recv = null;
+  }
+  if (!recv) {
+    try {
+      recv = loaded.recv_create(null);
+    } catch {
+      recv = null;
+    }
+  }
+  if (!recv) return null;
+  try {
+    loaded.recv_connect(recv, src);
+  } catch {
+    /* packed create settings may already have connected */
+  }
+  return recv;
+}
+
 function emitFrame(video: { xres: number; yres: number; FourCC?: number; p_data: unknown; line_stride_in_bytes: number }) {
   const loaded = api;
   if (!loaded || !onFrame || !connectedAssetId || !connectedName) return;
@@ -258,7 +296,13 @@ function emitFrame(video: { xres: number; yres: number; FourCC?: number; p_data:
   const rowBytes = stride > 0 ? stride : xres * 4;
   const total = rowBytes * yres;
   if (total <= 0 || total > 48_000_000) return;
-  const viewed = Buffer.from(loaded.koffi.view(video.p_data, total));
+  let viewed: Buffer;
+  try {
+    viewed = Buffer.from(loaded.koffi.view(video.p_data, total));
+  } catch (error) {
+    onLog?.(`NDI pixel pointer could not be read: ${error instanceof Error ? error.message : String(error)}`, "warn");
+    return;
+  }
   const packed = videoToBgra(viewed, xres, yres, rowBytes, fourcc);
   const scaled = downscaleBgra(packed, xres, yres, 960);
   if (!loggedFirst) {
@@ -274,21 +318,36 @@ function emitFrame(video: { xres: number; yres: number; FourCC?: number; p_data:
   });
 }
 
-function pump() {
-  if (!pumping || !api || !recvInst || !videoBuf) return;
+function captureVideo() {
+  const loaded = api;
+  if (!loaded || !recvInst) return { kind: 0, video: null as Record<string, unknown> | null };
+  const out: Record<string, unknown> = {};
   try {
+    const kind = loaded.recv_capture(recvInst, out, null, null, 40);
+    return { kind, video: out };
+  } catch {
+    if (!videoBuf) return { kind: 0, video: null };
     videoBuf.fill(0);
-    const kind = api.recv_capture(recvInst, videoBuf, null, null, 40);
-    if (kind === 1) {
+    const kind = loaded.recv_capture(recvInst, videoBuf, null, null, 40);
+    if (kind !== 1) return { kind, video: null };
+    return { kind, video: loaded.koffi.decode(videoBuf, loaded.VideoFrame) as Record<string, unknown> };
+  }
+}
+
+function pump() {
+  if (!pumping || !api || !recvInst) return;
+  try {
+    const { kind, video } = captureVideo();
+    if (kind === 1 && video) {
       try {
         const now = Date.now();
         if (now - lastEncode >= 80) {
           lastEncode = now;
-          emitFrame(api.koffi.decode(videoBuf, api.VideoFrame) as Parameters<typeof emitFrame>[0]);
+          emitFrame(video as Parameters<typeof emitFrame>[0]);
         }
       } finally {
         try {
-          api.recv_free_video(recvInst, videoBuf);
+          api.recv_free_video(recvInst, video);
         } catch {
           /* ignore */
         }
@@ -299,11 +358,11 @@ function pump() {
         lastEncode = now;
         const hint =
           kind === 4
-            ? "NDI dropped the connection. Is OBS Tools → NDI → Output Settings → Main Output still on?"
-            : `NDI waiting for video from ${connectedName} (capture ${kind}). OBS: Tools → NDI → Output Settings → enable Main Output. You do not need NDI Tools.`;
+            ? "NDI dropped the connection. Is OBS Tools → DistroAV NDI Settings → Main Output still on?"
+            : `NDI waiting for video from ${connectedName} (capture ${kind}). OBS Program must be a camera or Color Source — Display Capture of WatchJhon is a loop and Stage stays on NDI PROGRAM rings.`;
         onLog?.(hint, "warn");
       }
-      if (!loggedFirst && !triedNullRecv && connectedAt && now - connectedAt > 4000 && api && connectedName) {
+      if (!loggedFirst && !triedNullRecv && connectedAt && now - connectedAt > 2500 && api && connectedName) {
         triedNullRecv = true;
         onLog?.("NDI still no video — retrying with default receiver settings", "warn");
         try {
@@ -311,15 +370,8 @@ function pump() {
         } catch {
           /* ignore */
         }
-        const retry = api.recv_create(null);
-        if (retry) {
-          try {
-            api.recv_connect(retry, { p_ndi_name: connectedName, p_url_address: "" });
-          } catch {
-            /* ignore */
-          }
-          recvInst = retry;
-        }
+        const retry = openRecv({ p_ndi_name: connectedName, p_url_address: "" });
+        if (retry) recvInst = retry;
       }
     }
   } catch (error) {
@@ -378,24 +430,9 @@ export function connectNdiRecv(assetId: string, sourceName: string) {
   const name = match?.name || sourceName;
   const url = match?.ip || "";
   const src = { p_ndi_name: name, p_url_address: url };
-  // BGRA + highest bandwidth. OBS default is UYVY; the Runtime converts when we ask for BGRA.
-  const COLOR_BGRX_BGRA = 1;
-  const BANDWIDTH_HIGHEST = 100;
-  let recv =
-    loaded.recv_create({
-      source_to_connect_to: src,
-      color_format: COLOR_BGRX_BGRA,
-      bandwidth: BANDWIDTH_HIGHEST,
-      allow_video_fields: true,
-      p_ndi_recv_name: "WatchJhon",
-    }) || loaded.recv_create(null);
+  const recv = openRecv(src);
   if (!recv) {
     return { ok: false as const, error: `Could not connect to ${sourceName}` };
-  }
-  try {
-    loaded.recv_connect(recv, src);
-  } catch {
-    /* already connected via create settings */
   }
   recvInst = recv;
   connectedAssetId = assetId;

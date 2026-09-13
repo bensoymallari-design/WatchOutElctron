@@ -28,30 +28,35 @@ export function drawProcedural(
     return;
   }
 
-  if (kind === "ndi") {
+  if (kind === "ndi" || kind === "ndi-wait") {
+    const waiting = kind === "ndi-wait";
     ctx.fillStyle = "#081018";
     ctx.fillRect(0, 0, w, h);
     const cx = w / 2 + Math.sin(t) * 40;
     const cy = h / 2 + Math.cos(t * 0.8) * 20;
     const rg = ctx.createRadialGradient(cx, cy, 20, cx, cy, Math.max(w, h) * 0.55);
-    rg.addColorStop(0, "rgba(74,222,128,0.55)");
+    rg.addColorStop(0, waiting ? "rgba(245,166,35,0.5)" : "rgba(74,222,128,0.55)");
     rg.addColorStop(1, "rgba(8,16,24,0)");
     ctx.fillStyle = rg;
     ctx.fillRect(0, 0, w, h);
-    ctx.strokeStyle = "rgba(74,222,128,0.45)";
+    ctx.strokeStyle = waiting ? "rgba(245,166,35,0.45)" : "rgba(74,222,128,0.45)";
     ctx.lineWidth = 2;
     for (let i = 0; i < 8; i++) {
       ctx.beginPath();
       ctx.arc(cx, cy, 40 + i * 36 + (t * 30) % 36, 0, Math.PI * 2);
       ctx.stroke();
     }
-    ctx.fillStyle = "#4ade80";
+    ctx.fillStyle = waiting ? "#f5a623" : "#4ade80";
     ctx.font = `600 ${Math.max(18, w / 22)}px ui-sans-serif, system-ui`;
     ctx.textAlign = "center";
-    ctx.fillText("NDI  ·  PROGRAM", w / 2, h / 2 - 10);
-    ctx.fillStyle = "#86efac";
-    ctx.font = `${Math.max(12, w / 40)}px ui-monospace, monospace`;
-    ctx.fillText(new Date().toISOString().slice(11, 23), w / 2, h / 2 + 28);
+    ctx.fillText(waiting ? "NDI  ·  WAITING" : "NDI  ·  PROGRAM", w / 2, h / 2 - 18);
+    ctx.fillStyle = waiting ? "#fcd34d" : "#86efac";
+    ctx.font = `${Math.max(11, w / 42)}px ui-sans-serif, system-ui`;
+    ctx.fillText(
+      waiting ? "OBS: camera or Color Source — not Display Capture of WatchJhon" : new Date().toISOString().slice(11, 23),
+      w / 2,
+      h / 2 + 22,
+    );
     return;
   }
 
