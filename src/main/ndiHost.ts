@@ -1,8 +1,8 @@
 import { existsSync } from "node:fs";
 import { join } from "node:path";
-import { utilityProcess, webContents, type UtilityProcess } from "electron";
+import { nativeImage, utilityProcess, webContents, type UtilityProcess } from "electron";
 import { NDI_RUNTIME_URL, resolveNdiLibrary } from "./ndiLibrary";
-import { asNodeBuffer, swapRedBlue } from "./ndiPixels";
+import { asNodeBuffer, clonePixels, swapRedBlue } from "./ndiPixels";
 import type { NdiAdvert } from "../renderer/lib/ndiNames";
 
 interface Pending {
@@ -26,7 +26,25 @@ function workerFile() {
   return null;
 }
 
-function broadcastRgba(payload: { assetId: string; rgba: Buffer; width: number; height: number; sourceName: string }) {
+function jpegBase64(width: number, height: number, bgra: Buffer) {
+  try {
+    const img = nativeImage.createFromBitmap(bgra, { width, height, scaleFactor: 1 });
+    const jpeg = img.toJPEG(70);
+    if (jpeg && jpeg.length > 32) return jpeg.toString("base64");
+  } catch {
+    /* renderer still paints RGBA */
+  }
+  return "";
+}
+
+function broadcastFrame(payload: {
+  assetId: string;
+  rgba: Uint8Array;
+  jpegBase64: string;
+  width: number;
+  height: number;
+  sourceName: string;
+}) {
   for (const wc of webContents.getAllWebContents()) {
     if (wc.isDestroyed()) continue;
     wc.send("ndi:frame", payload);
@@ -67,9 +85,10 @@ function onWorkerMessage(msg: Record<string, unknown>) {
       }
       return;
     }
-    broadcastRgba({
+    broadcastFrame({
       assetId: String(msg.assetId),
-      rgba: swapRedBlue(bgra),
+      rgba: clonePixels(swapRedBlue(bgra)),
+      jpegBase64: jpegBase64(width, height, bgra),
       width,
       height,
       sourceName: String(msg.sourceName || ""),

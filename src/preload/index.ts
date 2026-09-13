@@ -1,4 +1,5 @@
 import { contextBridge, ipcRenderer, webUtils } from "electron";
+import { copyPixelBytes } from "../shared/ndiFrame";
 import type {
   ClockPayload,
   ImportedMedia,
@@ -57,7 +58,16 @@ const api = {
   disconnectNdi: (assetId?: string) => ipcRenderer.invoke("ndi:disconnect", assetId) as Promise<void>,
   ndiStatus: () => ipcRenderer.invoke("ndi:status") as Promise<NdiStatus>,
   onNdiFrame: (cb: (payload: NdiFramePayload) => void) => {
-    const listener = (_e: Electron.IpcRendererEvent, payload: NdiFramePayload) => cb(payload);
+    const listener = (_e: Electron.IpcRendererEvent, payload: Record<string, unknown>) => {
+      cb({
+        assetId: String(payload.assetId || ""),
+        width: Number(payload.width) || 0,
+        height: Number(payload.height) || 0,
+        sourceName: String(payload.sourceName || ""),
+        jpeg: typeof payload.jpegBase64 === "string" ? payload.jpegBase64 : undefined,
+        rgba: copyPixelBytes(payload.rgba) ?? undefined,
+      });
+    };
     ipcRenderer.on("ndi:frame", listener);
     return () => ipcRenderer.removeListener("ndi:frame", listener);
   },

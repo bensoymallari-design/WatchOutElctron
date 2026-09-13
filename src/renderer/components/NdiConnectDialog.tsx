@@ -54,8 +54,9 @@ export function NdiConnectDialog() {
       <div className="mb-2 text-sm font-semibold text-[#f5a623]">NDI</div>
       <p className="mb-3 text-[12px] leading-relaxed text-stone-400">
         Chromium cannot decode NDI itself. WatchJhon uses the free{" "}
-        <span className="text-stone-200">NDI Runtime</span> DLL (Resolume and OBS already have it). You do{" "}
-        <span className="text-stone-200">not</span> need NDI Tools, NDI Webcam Input, or Studio Monitor. In OBS open{" "}
+        <span className="text-stone-200">NDI Runtime</span> DLL. OBS having an NDI plugin is not enough unless that
+        Runtime is installed. If the box below is green, skip the download. You do{" "}
+        <span className="text-stone-200">not</span> need NDI Tools. In OBS open{" "}
         <span className="text-stone-200">Tools → NDI → Output Settings</span> and enable{" "}
         <span className="text-stone-200">Main Output</span> for a camera or a scene that is{" "}
         <span className="text-stone-200">not</span> Display Capture of WatchJhon. After Connect, the asset dot turns
@@ -70,14 +71,18 @@ export function NdiConnectDialog() {
         }`}
       >
         {runtime ? (
-          <>Runtime found{scan?.runtimePath ? ` · ${scan.runtimePath}` : ""}. Pick a source below.</>
+          <>
+            Runtime found{scan?.runtimePath ? ` · ${scan.runtimePath}` : ""}. You already have it — do{" "}
+            <span className="text-stone-100">not</span> download NDI Runtime or NDI Tools again. OBS Studio does not
+            keep this DLL inside the OBS folder; the obs-ndi plugin uses this same Runtime. Pick a source below.
+          </>
         ) : (
           <>
-            NDI Runtime not found on this PC. Install the free{" "}
+            WatchJhon cannot see the NDI Runtime DLL. OBS Studio does not include it by itself — install the free{" "}
             <button className="text-[#f5a623] underline" onClick={() => void window.watchout?.openExternal(NDI_RUNTIME_URL)}>
               NDI Runtime
             </button>{" "}
-            (or keep Resolume / OBS-NDI installed). Then restart WatchJhon.
+            (not NDI Tools). Then restart WatchJhon.
           </>
         )}
       </div>

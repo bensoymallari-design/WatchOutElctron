@@ -1,4 +1,5 @@
 import { isPaintReady } from "./liveReady";
+import { copyPixelBytes } from "../../shared/ndiFrame";
 
 const listeners = new Set<() => void>();
 
@@ -6,7 +7,7 @@ export type LiveKind = "camera" | "screen" | "url" | "phone" | "ndi";
 
 export interface NdiFramePayload {
   assetId: string;
-  jpeg?: Uint8Array | ArrayBuffer | { type?: string; data?: number[] };
+  jpeg?: Uint8Array | ArrayBuffer | { type?: string; data?: number[] } | string;
   rgba?: Uint8Array | ArrayBuffer | { type?: string; data?: number[] } | string;
   width: number;
   height: number;
@@ -23,6 +24,8 @@ interface LiveEntry {
 
 const lives = new Map<string, LiveEntry>();
 let ndiSinkStarted = false;
+let loggedPaint = false;
+let loggedDrop = false;
 
 export function subscribeLive(fn: () => void) {
   listeners.add(fn);
@@ -145,21 +148,7 @@ export function attachNdiCanvas(assetId: string) {
 }
 
 function pixelBytes(raw: NdiFramePayload["rgba"] | NdiFramePayload["jpeg"]) {
-  if (!raw) return null;
-  if (raw instanceof Uint8Array) return raw;
-  if (raw instanceof ArrayBuffer) return new Uint8Array(raw);
-  if (typeof raw === "string") {
-    try {
-      const bin = atob(raw);
-      const out = new Uint8Array(bin.length);
-      for (let i = 0; i < bin.length; i++) out[i] = bin.charCodeAt(i);
-      return out;
-    } catch {
-      return null;
-    }
-  }
-  if (raw && typeof raw === "object" && Array.isArray(raw.data)) return Uint8Array.from(raw.data);
-  return null;
+  return copyPixelBytes(raw);
 }
 
 export function applyNdiFrame(payload: NdiFramePayload) {
@@ -187,10 +176,23 @@ export function applyNdiFrame(payload: NdiFramePayload) {
     const current = lives.get(payload.assetId);
     if (current) current.ready = true;
     emit();
+    if (!loggedPaint) {
+      loggedPaint = true;
+      window.__woLog?.(`NDI Stage painted ${w}×${h}`, "info");
+    }
     return;
   }
   const bytes = pixelBytes(payload.jpeg);
-  if (!bytes) return;
+  if (!bytes) {
+    if (!loggedDrop) {
+      loggedDrop = true;
+      window.__woLog?.(
+        "NDI frame reached Producer but pixels were empty. Rebuild 7.8.21. If the NDI dialog is green, do not download Runtime again.",
+        "warn",
+      );
+    }
+    return;
+  }
   const blob = new Blob([bytes as BlobPart], { type: "image/jpeg" });
   void createImageBitmap(blob)
     .then((bmp) => {
@@ -208,6 +210,10 @@ export function applyNdiFrame(payload: NdiFramePayload) {
       bmp.close();
       current.ready = true;
       emit();
+      if (!loggedPaint) {
+        loggedPaint = true;
+        window.__woLog?.(`NDI Stage painted ${bmp.width}×${bmp.height} (JPEG)`, "info");
+      }
     })
     .catch(() => undefined);
 }
