@@ -1,7 +1,7 @@
 import { createRequire } from "node:module";
 import { dirname } from "node:path";
 import { NDI_RUNTIME_URL, resolveNdiLibrary } from "./ndiLibrary";
-import { copyBgraRows, downscaleBgra, isBgraFourCC } from "./ndiPixels";
+import { downscaleBgra, fourccLabel, videoToBgra } from "./ndiPixels";
 import { collapseSources, type NdiAdvert } from "../renderer/lib/ndiNames";
 
 const require = createRequire(import.meta.url);
@@ -34,6 +34,7 @@ export interface NdiRawFrame {
 }
 
 type FrameHandler = (frame: NdiRawFrame) => void;
+type LogHandler = (message: string, level?: "info" | "warn" | "error") => void;
 
 let api: NdiApi | null | undefined;
 let findInst: unknown = null;
@@ -44,9 +45,15 @@ let connectedName: string | null = null;
 let pumping = false;
 let lastEncode = 0;
 let onFrame: FrameHandler | null = null;
+let onLog: LogHandler | null = null;
+let loggedFirst = false;
 
 export function setNdiFrameHandler(fn: FrameHandler | null) {
   onFrame = fn;
+}
+
+export function setNdiLogHandler(fn: LogHandler | null) {
+  onLog = fn;
 }
 
 export function ndiRuntimePath() {
@@ -177,14 +184,19 @@ export function listSdkNdiSources(waitMs = 200): NdiAdvert[] {
 function emitFrame(video: { xres: number; yres: number; FourCC?: number; p_data: unknown; line_stride_in_bytes: number }) {
   const loaded = api;
   if (!loaded || !onFrame || !connectedAssetId || !connectedName) return;
-  if (!isBgraFourCC(Number(video.FourCC || 0))) return;
   if (!video.p_data || video.xres < 2 || video.yres < 2) return;
-  const stride = video.line_stride_in_bytes || video.xres * 4;
-  const total = stride * video.yres;
+  const stride = video.line_stride_in_bytes || 0;
+  const fourcc = Number(video.FourCC || 0) >>> 0;
+  const rowBytes = stride > 0 ? stride : video.xres * 4;
+  const total = rowBytes * video.yres;
   if (total <= 0 || total > 48_000_000) return;
   const viewed = Buffer.from(loaded.koffi.view(video.p_data, total));
-  const packed = copyBgraRows(viewed, video.xres, video.yres, stride);
+  const packed = videoToBgra(viewed, video.xres, video.yres, rowBytes, fourcc);
   const scaled = downscaleBgra(packed, video.xres, video.yres, 960);
+  if (!loggedFirst) {
+    loggedFirst = true;
+    onLog?.(`NDI picture ${video.xres}×${video.yres} ${fourccLabel(fourcc)}`, "info");
+  }
   onFrame({
     assetId: connectedAssetId,
     sourceName: connectedName,
@@ -261,28 +273,19 @@ export function connectNdiRecv(assetId: string, sourceName: string) {
   const match = pickSource(sources, sourceName);
   const name = match?.name || sourceName;
   const url = match?.ip || null;
-  let recv = loaded.recv_create({
-    p_ndi_name: name,
-    p_url_address: url,
-    color_format: 0,
-    bandwidth: 0,
-    allow_video_fields: false,
-    p_ndi_recv_name: "WatchJhon",
-  });
-  if (!recv) recv = loaded.recv_create(null);
+  // NULL settings avoid a packed-struct mismatch; connect by name. Default format is often UYVY.
+  const recv = loaded.recv_create(null);
   if (!recv) {
     return { ok: false as const, error: `Could not connect to ${sourceName}` };
   }
-  try {
-    loaded.recv_connect(recv, { p_ndi_name: name, p_url_address: url });
-  } catch {
-    /* create already had the source */
-  }
+  loaded.recv_connect(recv, { p_ndi_name: name, p_url_address: url });
   recvInst = recv;
   connectedAssetId = assetId;
   connectedName = name;
+  loggedFirst = false;
   pumping = true;
   setTimeout(pump, 0);
+  onLog?.(`NDI helper connected to ${name}`, "info");
   return { ok: true as const, name: connectedName, runtime: true };
 }
 

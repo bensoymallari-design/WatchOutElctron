@@ -4,6 +4,7 @@ import {
   listSdkNdiSources,
   ndiStatus,
   setNdiFrameHandler,
+  setNdiLogHandler,
 } from "./ndiRuntime";
 
 type Port = {
@@ -17,6 +18,8 @@ function send(msg: unknown) {
   port?.postMessage(msg);
 }
 
+setNdiLogHandler((message, level) => send({ op: "log", message, level: level ?? "info" }));
+
 setNdiFrameHandler((frame) => {
   send({
     op: "frame",
@@ -24,7 +27,7 @@ setNdiFrameHandler((frame) => {
     sourceName: frame.sourceName,
     width: frame.width,
     height: frame.height,
-    bgra: frame.bgra,
+    bgra: new Uint8Array(frame.bgra),
   });
 });
 
