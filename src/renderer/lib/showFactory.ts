@@ -131,7 +131,7 @@ export function localNode(partial?: Partial<ShowNode>): ShowNode {
     gpuLoad: 22,
     ram: 41,
     disk: 12,
-    version: "7.8.10",
+    version: "7.8.11",
     ...partial,
   };
 }

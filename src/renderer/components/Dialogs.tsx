@@ -66,11 +66,13 @@ function AboutDialog() {
   return (
     <div className="p-5">
       <div className="text-2xl font-black tracking-[0.2em] text-[#f5a623]">WATCHOUT</div>
-      <div className="mt-1 text-stone-400">WATCHOUT Producer 7.8.10 — desktop edition</div>
+      <div className="mt-1 text-stone-400">WATCHOUT Producer 7.8.11 — desktop edition</div>
       <p className="mt-3 text-[12px] leading-relaxed text-stone-400">
         Multi-display show composer with Stage, Timeline, Assets, Devices, Nodes, Variables and Cue control.
         Runner outputs are native fullscreen windows bound to OS monitors. H.264 / HAP / ProRes need a VP9+Opus
         WebM. Use File → Prepare videos overnight, then import — or let ffmpeg build the proxy after Import.
+        Output can still look a bit laggy on a laptop: Chromium VP9 is not Resolume DXV, and each Output window
+        decodes the whole file. Use 1080p + Output (one screen) on a test laptop; full size + Output all on the show PC.
       </p>
       <div className="mt-4 text-right">
         <button className="rounded bg-[#f5a623] px-3 py-1 text-black" onClick={() => useApp.getState().setDialog(null)}>

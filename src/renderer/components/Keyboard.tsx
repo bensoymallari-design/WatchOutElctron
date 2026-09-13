@@ -147,6 +147,17 @@ export function Keyboard() {
         e.preventDefault();
         a.fitSelectedToDisplay("cover");
       }
+      if (a.selection.kind === "cue" && a.selection.ids[0] && ["ArrowLeft", "ArrowRight", "ArrowUp", "ArrowDown"].includes(e.key)) {
+        e.preventDefault();
+        const show = a.show;
+        const cue = show?.timelines.flatMap((t) => t.cues).find((c) => c.id === a.selection.ids[0]);
+        if (cue) {
+          const step = e.shiftKey ? 10 : 1;
+          const dx = e.key === "ArrowLeft" ? -step : e.key === "ArrowRight" ? step : 0;
+          const dy = e.key === "ArrowUp" ? -step : e.key === "ArrowDown" ? step : 0;
+          a.updateCue(cue.id, { position: { ...cue.position, x: cue.position.x + dx, y: cue.position.y + dy } });
+        }
+      }
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);

@@ -841,7 +841,14 @@ export const useApp = create<AppState & AppActions>((set, get) => ({
         s.log(error instanceof Error ? error.message : "Output failed", "error");
       }
     }
-    s.log(`Opened ${show.displays.filter((d) => d.enabled && !d.virtual).length} native output window(s)`);
+    const n = show.displays.filter((d) => d.enabled && !d.virtual).length;
+    s.log(`Opened ${n} native output window(s)`);
+    if (n > 1) {
+      s.log(
+        "Each Output window decodes the whole VP9 file. On a laptop use Output (one screen) and 1080p WebM — Output all at full size is for the show PC.",
+        "warn",
+      );
+    }
   },
 
   addCueType: (type) =>

@@ -3,6 +3,7 @@ import { useEffect, useRef, useState } from "react";
 import { useApp } from "@/store/appStore";
 import { formatPlayTime } from "@/lib/time";
 import { getLiveKind, getLiveVideo, subscribeLive } from "@/lib/liveSources";
+import { hasLiveOutputs, subscribeOutputs } from "@/lib/displayOutput";
 import { drawProcedural } from "@/lib/procedural";
 import { FolderPlus, Image as ImageIcon, Film, Music, Radio, Box, Trash2 } from "lucide-react";
 import type { Asset } from "@/types/show";
@@ -182,8 +183,11 @@ export function AssetsWindow() {
 function AssetPreview({ asset }: { asset?: Asset }) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const [, setTick] = useState(0);
+  const [liveTick, setLiveTick] = useState(0);
 
   useEffect(() => subscribeLive(() => setTick((n) => n + 1)), []);
+  useEffect(() => subscribeOutputs(() => setLiveTick((n) => n + 1)), []);
+  const outputsLive = liveTick >= 0 && hasLiveOutputs();
 
   useEffect(() => {
     if (!asset || (asset.kind !== "ndi" && asset.kind !== "capture" && !asset.url.startsWith("procedural:"))) return;
@@ -229,16 +233,20 @@ function AssetPreview({ asset }: { asset?: Asset }) {
   if (asset.kind === "video" && asset.url) {
     return (
       <div className="checker mb-2 grid aspect-video place-items-center overflow-hidden rounded border border-[#333]">
-        <video
-          src={asset.url}
-          poster={asset.posterUrl}
-          muted
-          playsInline
-          autoPlay
-          loop
-          preload="auto"
-          className="h-full w-full object-contain"
-        />
+        {outputsLive && asset.posterUrl ? (
+          <img src={asset.posterUrl} alt="" className="h-full w-full object-contain" />
+        ) : (
+          <video
+            src={asset.url}
+            poster={asset.posterUrl}
+            muted
+            playsInline
+            autoPlay={!outputsLive}
+            loop
+            preload={outputsLive ? "metadata" : "auto"}
+            className="h-full w-full object-contain"
+          />
+        )}
       </div>
     );
   }

@@ -1,5 +1,6 @@
 import { useEffect, useRef } from "react";
 import { useApp } from "@/store/appStore";
+import { hasLiveOutputs, subscribeOutputs } from "@/lib/displayOutput";
 import { stopPlaybackAudio, syncPlaybackAudio } from "@/lib/playbackAudio";
 
 export function PlaybackClock() {
@@ -10,6 +11,8 @@ export function PlaybackClock() {
   const lastGen = useRef(-1);
   const lastShowId = useRef<string>("");
   const lastAutosave = useRef(0);
+
+  useEffect(() => subscribeOutputs(() => undefined), []);
 
   useEffect(() => {
     const step = (now: number) => {
@@ -48,7 +51,8 @@ export function PlaybackClock() {
           void window.watchout.autosave(JSON.stringify(show), show.name);
         }
       }
-      syncPlaybackAudio(show);
+      if (hasLiveOutputs()) stopPlaybackAudio();
+      else syncPlaybackAudio(show);
     };
     let raf = 0;
     const loop = (now: number) => {

@@ -19,6 +19,12 @@ export function getImage(url: string) {
   return img;
 }
 
+export function pauseStageVideos() {
+  for (const v of videoCache.values()) {
+    if (!v.paused) v.pause();
+  }
+}
+
 export function getVideo(
   id: string,
   url: string,
@@ -68,6 +74,12 @@ function procCanvas(kind: string, timeMs: number) {
   return c;
 }
 
+function posterFor(asset: Asset): CanvasImageSource | null {
+  if (!asset.posterUrl) return null;
+  const img = getImage(asset.posterUrl);
+  return img.complete && img.naturalWidth > 0 ? img : null;
+}
+
 function sourceFor(
   asset: Asset | undefined,
   cueId: string,
@@ -75,6 +87,7 @@ function sourceFor(
   localTimeMs: number,
   playing: boolean,
   freeRunning: boolean,
+  livePreview: boolean,
 ): CanvasImageSource | null {
   if (!asset) return null;
   const live = getLiveVideo(asset.id);
@@ -86,16 +99,17 @@ function sourceFor(
     return procCanvas(asset.url.slice("procedural:".length), timeMs);
   }
   if (asset.kind === "video" && asset.url) {
+    if (!livePreview) {
+      const cached = videoCache.get(asset.id || cueId);
+      if (cached && !cached.paused) cached.pause();
+      return posterFor(asset) ?? (cached && cached.readyState >= 2 ? cached : null);
+    }
     const v = getVideo(asset.id || cueId, asset.url, localTimeMs, playing, freeRunning, {
       bytes: asset.bytes,
       posterUrl: asset.posterUrl,
     });
     if (v.readyState >= 2) return v;
-    if (asset.posterUrl) {
-      const img = getImage(asset.posterUrl);
-      if (img.complete && img.naturalWidth > 0) return img;
-    }
-    return null;
+    return posterFor(asset);
   }
   if (asset.url) {
     const img = getImage(asset.url);
@@ -179,6 +193,8 @@ export function drawStage(options: {
   snapGuides?: { x: number[]; y: number[] };
   pixelPerfect?: boolean;
   playing?: boolean;
+  /** When false, Stage draws a still so Output windows keep the only VP9 decoder. */
+  livePreview?: boolean;
 }) {
   const {
     canvas,
@@ -194,7 +210,9 @@ export function drawStage(options: {
     snapGuides,
     pixelPerfect,
     playing = true,
+    livePreview = true,
   } = options;
+  if (!livePreview) pauseStageVideos();
   const ctx = canvas.getContext("2d");
   if (!ctx) return;
   const dpr = pixelPerfect ? 1 : window.devicePixelRatio || 1;
@@ -257,7 +275,7 @@ export function drawStage(options: {
     const cue = ev.cue;
     if (cue.type !== "media") continue;
     const asset = cue.assetId ? assetById.get(cue.assetId) : undefined;
-    const src = sourceFor(asset, cue.id, timeMs, ev.localTime, playing, cue.freeRunning);
+    const src = sourceFor(asset, cue.id, timeMs, ev.localTime, playing, cue.freeRunning, livePreview);
     const aw = asset?.width || 1920;
     const ah = asset?.height || 1080;
     const w = aw * (ev.scaleX / 100);
@@ -315,6 +333,24 @@ export function drawStage(options: {
       ctx.strokeStyle = "#f59e0b";
       ctx.lineWidth = 2 / camera.zoom;
       ctx.strokeRect(0, 0, w, h);
+      const hs = 8 / camera.zoom;
+      ctx.fillStyle = "#f59e0b";
+      ctx.strokeStyle = "#111";
+      ctx.lineWidth = 1 / camera.zoom;
+      const spots = [
+        [0, 0],
+        [w / 2, 0],
+        [w, 0],
+        [0, h / 2],
+        [w, h / 2],
+        [0, h],
+        [w / 2, h],
+        [w, h],
+      ];
+      for (const [hx, hy] of spots) {
+        ctx.fillRect(hx - hs / 2, hy - hs / 2, hs, hs);
+        ctx.strokeRect(hx - hs / 2, hy - hs / 2, hs, hs);
+      }
     }
     ctx.restore();
   }
