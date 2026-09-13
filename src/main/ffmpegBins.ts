@@ -13,6 +13,15 @@ export function asarUnpackedPath(binPath: string) {
     .replace("\\app.asar\\", "\\app.asar.unpacked\\");
 }
 
+/**
+ * Fork scripts that import hashed `chunks/` must run from the asar copy.
+ * Unpacking only the entry file (ndiWorker.js) leaves chunks inside the asar and Node
+ * throws ERR_MODULE_NOT_FOUND for `out/main/chunks/ndiPixels-*.js`.
+ */
+export function preferPackedPath(packed: string[], unpacked: string[], exists: (p: string) => boolean) {
+  return packed.find((p) => exists(p)) ?? unpacked.find((p) => exists(p)) ?? null;
+}
+
 export function resolvePackagedBinary(binPath: string | undefined) {
   if (!binPath) return undefined;
   const unpacked = asarUnpackedPath(binPath);

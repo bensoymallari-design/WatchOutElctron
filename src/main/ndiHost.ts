@@ -1,7 +1,7 @@
 import { existsSync } from "node:fs";
 import { join } from "node:path";
 import { nativeImage, utilityProcess, webContents, type UtilityProcess } from "electron";
-import { asarUnpackedPath } from "./ffmpegBins";
+import { asarUnpackedPath, preferPackedPath } from "./ffmpegBins";
 import { NDI_RUNTIME_URL, pinNdiRuntimeOnEnv, resolveNdiLibrary } from "./ndiLibrary";
 import { asNodeBuffer, clonePixels, swapRedBlue } from "./ndiPixels";
 import type { NdiAdvert } from "../renderer/lib/ndiNames";
@@ -24,10 +24,7 @@ let starting: Promise<void> | null = null;
 function workerFile() {
   const js = join(__dirname, "ndiWorker.js");
   const mjs = join(__dirname, "ndiWorker.mjs");
-  for (const cand of [asarUnpackedPath(mjs), mjs, asarUnpackedPath(js), js]) {
-    if (existsSync(cand)) return cand;
-  }
-  return null;
+  return preferPackedPath([mjs, js], [asarUnpackedPath(mjs), asarUnpackedPath(js)], existsSync);
 }
 
 function prepareInheritedEnv() {

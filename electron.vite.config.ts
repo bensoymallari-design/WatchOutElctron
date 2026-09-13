@@ -12,6 +12,9 @@ export default defineConfig({
           index: resolve(__dirname, "src/main/index.ts"),
           ndiWorker: resolve(__dirname, "src/main/ndiWorker.ts"),
         },
+        output: {
+          experimentalMinChunkSize: 10_000_000,
+        },
       },
     },
   },
