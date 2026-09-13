@@ -2,7 +2,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useApp, useActiveTimeline } from "@/store/appStore";
 import { formatMs } from "@/lib/time";
-import { cueHasConflict, snapTime, timelineAnchors } from "@/lib/timeline";
+import { cueHasConflict, snapTime, timelineAnchors, timelineClickSeeksPlayhead } from "@/lib/timeline";
 import { PopupMenu, type MenuItem } from "@/components/ContextMenu";
 import type { Cue, Layer } from "@/types/show";
 import { Eye, Lock, Maximize2, Pause, Play, Square, ZoomIn, ZoomOut } from "lucide-react";
@@ -105,6 +105,11 @@ export function TimelineWindow() {
         { label: "Fade-out", shortcut: "Shift+Alt+O", onClick: () => useApp.getState().toggleFade("out") },
         { label: "Cross-fade", shortcut: "Shift+Alt+X", onClick: () => useApp.getState().applyCrossfade() },
         { sep: true },
+        {
+          label: cue.muted ? "Unmute audio" : "Mute audio",
+          onClick: () => useApp.getState().updateCue(cue.id, { muted: !cue.muted }),
+        },
+        { sep: true },
         { label: "Duplicate", shortcut: "Ctrl+D", onClick: () => useApp.getState().duplicateSelected() },
         { label: "Delete", shortcut: "Del", danger: true, onClick: () => useApp.getState().deleteSelected() },
       ],
@@ -189,7 +194,7 @@ export function TimelineWindow() {
             if (e.target !== e.currentTarget && !(e.target as HTMLElement).dataset?.lane) return;
             const { start, layer } = timeAndLayerAt(e.clientX, e.clientY);
             if (layer) useApp.getState().select({ kind: "layer", ids: [layer.id] });
-            if (clickJumps) useApp.getState().setPlayhead(tl.id, start);
+            if (timelineClickSeeksPlayhead("lane", clickJumps)) useApp.getState().setPlayhead(tl.id, start);
           }}
           onContextMenu={(e) => {
             if ((e.target as HTMLElement).closest("[data-cue]")) return;
@@ -261,7 +266,7 @@ export function TimelineWindow() {
                   onSelect={(additive) => {
                     const ids = additive && selection.kind === "cue" ? [...new Set([...selection.ids, cue.id])] : [cue.id];
                     useApp.getState().select({ kind: "cue", ids });
-                    if (clickJumps) useApp.getState().setPlayhead(tl.id, cue.start);
+                    useApp.getState().focusWindow("properties");
                   }}
                   onMenu={(x, y) => {
                     useApp.getState().select({ kind: "cue", ids: [cue.id] });
@@ -290,7 +295,7 @@ export function TimelineWindow() {
           <input type="checkbox" checked={tl.loop} onChange={(e) => useApp.getState().updateTimeline(tl.id, { loop: e.target.checked })} />
           Loop
         </label>
-        <span className="ml-3 text-[10px] text-stone-600">Drag assets onto a layer · stretch edges · overlap + fade-out/in = cross-fade</span>
+        <span className="ml-3 text-[10px] text-stone-600">Click a clip to edit Properties (playhead stays). Drag the ruler to scrub. Mute in Properties when two clips overlap.</span>
         <div className="ml-auto flex items-center gap-1">
           <button onClick={() => useApp.getState().setTimelineView(zoom / 1.25, scroll)}><ZoomOut size={13} /></button>
           <button onClick={() => useApp.getState().setTimelineView(zoom * 1.25, scroll)}><ZoomIn size={13} /></button>
@@ -405,7 +410,13 @@ function CueBar({
         (e.currentTarget as HTMLElement).style.cursor = cue.type !== "marker" && (x < 8 || x > w - 8) ? "col-resize" : "grab";
       }}
       onMouseEnter={() => useApp.getState().setHoverCue(cue.id)}
-      title={conflict ? `${cue.name} — overlap conflict. Move apart, or fade-out + fade-in to cross-fade.` : cue.name}
+      title={
+        conflict
+          ? `${cue.name} — overlap conflict. Move apart, or fade-out + fade-in to cross-fade.`
+          : cue.muted
+            ? `${cue.name} — audio muted`
+            : cue.name
+      }
     >
       {fadeInW > 0 && (
         <span
@@ -420,7 +431,7 @@ function CueBar({
         />
       )}
       {conflict && <span className="cue-stripe pointer-events-none absolute inset-0" />}
-      <span className="relative px-1.5">{cue.type === "marker" ? "◆" : cue.name}</span>
+      <span className="relative px-1.5">{cue.type === "marker" ? "◆" : cue.muted ? `🔇 ${cue.name}` : cue.name}</span>
     </div>
   );
 }

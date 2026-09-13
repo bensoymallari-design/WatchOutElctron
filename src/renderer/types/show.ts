@@ -100,6 +100,8 @@ export interface Cue {
   rotation: Vec3;
   opacity: number;
   volume: number;
+  /** Silence this cue’s soundtrack; picture still plays. Missing on older shows = audible. */
+  muted?: boolean;
   blur: number;
   brightness: number;
   contrast: number;

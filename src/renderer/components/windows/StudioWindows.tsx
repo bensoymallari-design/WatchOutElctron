@@ -330,7 +330,7 @@ export function CuesWindow() {
           onClick={() => {
             useApp.getState().setActiveTimeline(t.id);
             useApp.getState().select({ kind: "cue", ids: [c.id] });
-            useApp.getState().setPlayhead(t.id, c.start);
+            useApp.getState().focusWindow("properties");
           }}
         >
           <span className="truncate">{c.name}</span>

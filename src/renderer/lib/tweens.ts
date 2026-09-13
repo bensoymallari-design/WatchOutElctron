@@ -74,7 +74,7 @@ export function evaluateCue(cue: Cue, playhead: number, others: Cue[] = []): Eva
     rotX: pick(map, "rotationX", local, cue.rotation.x),
     rotY: pick(map, "rotationY", local, cue.rotation.y),
     rotZ: pick(map, "rotationZ", local, cue.rotation.z),
-    volume: pick(map, "volume", local, cue.volume),
+    volume: cue.muted ? 0 : pick(map, "volume", local, cue.volume),
     blur: pick(map, "blur", local, cue.blur),
     brightness: pick(map, "brightness", local, cue.brightness),
     contrast: pick(map, "contrast", local, cue.contrast),

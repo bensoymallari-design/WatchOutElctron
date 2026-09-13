@@ -101,6 +101,7 @@ export function emptyCue(partial: Partial<Cue> & Pick<Cue, "layerId" | "start">)
     rotation: { x: 0, y: 0, z: 0 },
     opacity: 100,
     volume: 100,
+    muted: false,
     blur: 0.5,
     brightness: 0,
     contrast: 0,
@@ -131,7 +132,7 @@ export function localNode(partial?: Partial<ShowNode>): ShowNode {
     gpuLoad: 22,
     ram: 41,
     disk: 12,
-    version: "7.8.11",
+    version: "7.8.12",
     ...partial,
   };
 }
