@@ -1,5 +1,16 @@
 import { contextBridge, ipcRenderer, webUtils } from "electron";
-import type { ClockPayload, ImportedMedia, NdiScan, OpenOutputOptions, OutputScreen, RebuildMediaRequest, RecentShow } from "../shared/ipc";
+import type {
+  ClockPayload,
+  ImportedMedia,
+  NdiConnectResult,
+  NdiFramePayload,
+  NdiScan,
+  NdiStatus,
+  OpenOutputOptions,
+  OutputScreen,
+  RebuildMediaRequest,
+  RecentShow,
+} from "../shared/ipc";
 
 const api = {
   platform: process.platform,
@@ -41,6 +52,15 @@ const api = {
     ipcRenderer.invoke("media:prepare", mode) as Promise<{ dest: string; skipped: boolean }[]>,
   ffmpegReady: () => ipcRenderer.invoke("media:ffmpeg") as Promise<boolean>,
   discoverNdi: () => ipcRenderer.invoke("ndi:discover") as Promise<NdiScan>,
+  connectNdi: (assetId: string, sourceName: string) =>
+    ipcRenderer.invoke("ndi:connect", assetId, sourceName) as Promise<NdiConnectResult>,
+  disconnectNdi: (assetId?: string) => ipcRenderer.invoke("ndi:disconnect", assetId) as Promise<void>,
+  ndiStatus: () => ipcRenderer.invoke("ndi:status") as Promise<NdiStatus>,
+  onNdiFrame: (cb: (payload: NdiFramePayload) => void) => {
+    const listener = (_e: Electron.IpcRendererEvent, payload: NdiFramePayload) => cb(payload);
+    ipcRenderer.on("ndi:frame", listener);
+    return () => ipcRenderer.removeListener("ndi:frame", listener);
+  },
   gpuInfo: () => ipcRenderer.invoke("app:gpu") as Promise<string>,
   openExternal: (url: string) => ipcRenderer.invoke("app:openExternal", url) as Promise<void>,
   pathForFile: (file: File) => {

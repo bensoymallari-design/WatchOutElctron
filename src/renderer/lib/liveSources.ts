@@ -1,14 +1,27 @@
+import { isPaintReady } from "./liveReady";
+
 const listeners = new Set<() => void>();
 
-export type LiveKind = "camera" | "screen" | "url" | "phone";
+export type LiveKind = "camera" | "screen" | "url" | "phone" | "ndi";
+
+export interface NdiFramePayload {
+  assetId: string;
+  jpeg: Uint8Array | ArrayBuffer | { type?: string; data?: number[] };
+  width: number;
+  height: number;
+  sourceName: string;
+}
 
 interface LiveEntry {
-  video: HTMLVideoElement;
+  video?: HTMLVideoElement;
+  canvas?: HTMLCanvasElement;
   stream?: MediaStream;
   kind: LiveKind;
+  ready: boolean;
 }
 
 const lives = new Map<string, LiveEntry>();
+let ndiSinkStarted = false;
 
 export function subscribeLive(fn: () => void) {
   listeners.add(fn);
@@ -21,8 +34,11 @@ function emit() {
   listeners.forEach((fn) => fn());
 }
 
-export function getLiveVideo(assetId: string) {
-  return lives.get(assetId)?.video ?? null;
+export function getLiveVideo(assetId: string): CanvasImageSource | null {
+  const entry = lives.get(assetId);
+  if (!entry) return null;
+  if (entry.canvas && entry.ready) return entry.canvas;
+  return entry.video ?? entry.canvas ?? null;
 }
 
 export function getLiveKind(assetId: string): LiveKind | null {
@@ -30,8 +46,17 @@ export function getLiveKind(assetId: string): LiveKind | null {
 }
 
 export function isLiveConnected(assetId: string) {
-  const video = lives.get(assetId)?.video;
-  return !!video && video.readyState >= 2;
+  const entry = lives.get(assetId);
+  if (!entry) return false;
+  if (entry.kind === "ndi") return true;
+  return isPaintReady(entry.video);
+}
+
+export function isLiveReady(assetId: string) {
+  const entry = lives.get(assetId);
+  if (!entry) return false;
+  if (entry.canvas) return !!entry.ready;
+  return isPaintReady(entry.video);
 }
 
 function makeVideo() {
@@ -50,7 +75,7 @@ function attachStream(assetId: string, stream: MediaStream, kind: LiveKind) {
   const play = () => void video.play().catch(() => undefined);
   video.onloadedmetadata = play;
   play();
-  lives.set(assetId, { video, stream, kind });
+  lives.set(assetId, { video, stream, kind, ready: true });
   emit();
   return video;
 }
@@ -101,18 +126,76 @@ export async function connectUrl(assetId: string, url: string) {
   video.crossOrigin = "anonymous";
   video.src = url;
   await video.play();
-  lives.set(assetId, { video, kind: "url" });
+  lives.set(assetId, { video, kind: "url", ready: true });
   emit();
   return video;
+}
+
+export function attachNdiCanvas(assetId: string) {
+  const existing = lives.get(assetId);
+  if (existing?.kind === "ndi" && existing.canvas) return existing.canvas;
+  disconnectLive(assetId);
+  const canvas = document.createElement("canvas");
+  canvas.width = 2;
+  canvas.height = 2;
+  lives.set(assetId, { canvas, kind: "ndi", ready: false });
+  emit();
+  return canvas;
+}
+
+function jpegBytes(jpeg: NdiFramePayload["jpeg"]) {
+  if (jpeg instanceof Uint8Array) return jpeg;
+  if (jpeg instanceof ArrayBuffer) return new Uint8Array(jpeg);
+  if (jpeg && typeof jpeg === "object" && Array.isArray(jpeg.data)) return Uint8Array.from(jpeg.data);
+  return null;
+}
+
+export function applyNdiFrame(payload: NdiFramePayload) {
+  const bytes = jpegBytes(payload.jpeg);
+  if (!bytes || !payload.assetId) return;
+  let entry = lives.get(payload.assetId);
+  if (!entry || entry.kind !== "ndi" || !entry.canvas) {
+    attachNdiCanvas(payload.assetId);
+    entry = lives.get(payload.assetId);
+  }
+  const canvas = entry?.canvas;
+  if (!canvas) return;
+  const blob = new Blob([bytes as BlobPart], { type: "image/jpeg" });
+  void createImageBitmap(blob)
+    .then((bmp) => {
+      const current = lives.get(payload.assetId);
+      if (!current?.canvas) {
+        bmp.close();
+        return;
+      }
+      if (current.canvas.width !== bmp.width || current.canvas.height !== bmp.height) {
+        current.canvas.width = bmp.width;
+        current.canvas.height = bmp.height;
+      }
+      const ctx = current.canvas.getContext("2d");
+      ctx?.drawImage(bmp, 0, 0);
+      bmp.close();
+      current.ready = true;
+      emit();
+    })
+    .catch(() => undefined);
+}
+
+export function startNdiFrameSink() {
+  if (ndiSinkStarted) return;
+  ndiSinkStarted = true;
+  window.watchout?.onNdiFrame?.((payload) => applyNdiFrame(payload));
 }
 
 export function disconnectLive(assetId: string) {
   const entry = lives.get(assetId);
   if (!entry) return;
   entry.stream?.getTracks().forEach((track) => track.stop());
-  entry.video.pause();
-  entry.video.srcObject = null;
-  entry.video.removeAttribute("src");
+  if (entry.video) {
+    entry.video.pause();
+    entry.video.srcObject = null;
+    entry.video.removeAttribute("src");
+  }
   lives.delete(assetId);
   emit();
 }

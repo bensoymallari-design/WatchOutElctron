@@ -70,6 +70,29 @@ export interface NdiScan {
   lan: { address: string; name: string }[];
   ok: boolean;
   error?: string;
+  runtime?: boolean;
+  runtimePath?: string | null;
+}
+
+export interface NdiStatus {
+  runtime: boolean;
+  runtimePath: string | null;
+  connected: string | null;
+}
+
+export interface NdiConnectResult {
+  ok: boolean;
+  error?: string;
+  name?: string;
+  runtime?: boolean;
+}
+
+export interface NdiFramePayload {
+  assetId: string;
+  jpeg: Uint8Array;
+  width: number;
+  height: number;
+  sourceName: string;
 }
 
 export interface OpenOutputOptions {

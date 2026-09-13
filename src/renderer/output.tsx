@@ -1,5 +1,6 @@
 import { useEffect, useRef } from "react";
 import { syncOutputFrame } from "@/lib/outputCompositor";
+import { startNdiFrameSink } from "@/lib/liveSources";
 import type { Show } from "@/types/show";
 import type { ClockPayload } from "../shared/ipc";
 
@@ -20,6 +21,7 @@ export function OutputView() {
   const playAudio = playAudioFromUrl();
 
   useEffect(() => {
+    startNdiFrameSink();
     const api = window.watchout;
     const applyShow = (raw: unknown) => {
       if (raw && typeof raw === "object") showRef.current = raw as Show;

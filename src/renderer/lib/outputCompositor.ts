@@ -1,6 +1,6 @@
 import type { Asset, Show } from "@/types/show";
 import { collectStageCues } from "@/lib/stageCues";
-import { getLiveVideo } from "@/lib/liveSources";
+import { getLiveVideo, isLiveReady } from "@/lib/liveSources";
 import { drawProcedural } from "@/lib/procedural";
 import { applyAudioSink } from "@/lib/audioSink";
 import { videoPreload } from "../../shared/mediaPolicy";
@@ -126,7 +126,7 @@ export function syncOutputFrame(host: HTMLElement, show: Show, displayId: string
 
     if (media instanceof HTMLVideoElement) {
       const live = asset ? getLiveVideo(asset.id) : null;
-      if (live) {
+      if (live instanceof HTMLVideoElement) {
         if (media.srcObject !== live.srcObject) {
           media.srcObject = live.srcObject;
           void media.play().catch(() => undefined);
@@ -155,7 +155,7 @@ export function syncOutputFrame(host: HTMLElement, show: Show, displayId: string
           media.height = 720;
         }
         const live = getLiveVideo(asset.id);
-        if (live && live.readyState >= 2) ctx.drawImage(live, 0, 0, media.width, media.height);
+        if (live && isLiveReady(asset.id)) ctx.drawImage(live, 0, 0, media.width, media.height);
         else drawProcedural(ctx, kind, media.width, media.height, now);
       }
     } else if (media instanceof HTMLImageElement && asset?.url && media.src !== asset.url) {

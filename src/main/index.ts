@@ -17,6 +17,8 @@ import {
 import { autosave, loadRecents, openShowDialog, readShowFile, rememberShow, saveShowDialog } from "./shows";
 import { startSignalServer } from "./signaling";
 import { discoverNdiSources, lanIPv4, startNdiFinder, stopNdiFinder } from "../renderer/lib/ndiDiscover";
+import { mergeNdiLists } from "../renderer/lib/ndiNames";
+import { connectNdiRecv, disconnectNdiRecv, listSdkNdiSources, ndiStatus } from "./ndiRuntime";
 import type { ClockPayload, ImportedMedia, OpenOutputOptions } from "../shared/ipc";
 
 registerMediaScheme();
@@ -158,18 +160,33 @@ function bindIpc() {
   });
 
   ipcMain.handle("ndi:discover", async () => {
+    const status = ndiStatus();
     try {
-      const sources = await discoverNdiSources(4500);
-      return { sources, lan: lanIPv4(), ok: true };
+      const mdns = await discoverNdiSources(4500);
+      const sdk = listSdkNdiSources(status.runtime ? 400 : 0);
+      return {
+        sources: mergeNdiLists(mdns, sdk),
+        lan: lanIPv4(),
+        ok: true,
+        runtime: status.runtime,
+        runtimePath: status.runtimePath,
+      };
     } catch (error) {
       return {
-        sources: [],
+        sources: listSdkNdiSources(status.runtime ? 400 : 0),
         lan: lanIPv4(),
         ok: false,
         error: error instanceof Error ? error.message : "NDI scan failed",
+        runtime: status.runtime,
+        runtimePath: status.runtimePath,
       };
     }
   });
+  ipcMain.handle("ndi:connect", (_e, assetId: string, sourceName: string) => connectNdiRecv(assetId, sourceName));
+  ipcMain.handle("ndi:disconnect", (_e, assetId?: string) => {
+    disconnectNdiRecv(assetId);
+  });
+  ipcMain.handle("ndi:status", () => ndiStatus());
 
   ipcMain.handle("app:gpu", async () => {
     try {
@@ -217,8 +234,14 @@ app.whenReady().then(() => {
   });
 });
 
+app.on("before-quit", () => {
+  disconnectNdiRecv();
+  stopNdiFinder();
+});
+
 app.on("window-all-closed", () => {
   if (blocker != null) powerSaveBlocker.stop(blocker);
+  disconnectNdiRecv();
   stopNdiFinder();
   if (process.platform !== "darwin") app.quit();
 });

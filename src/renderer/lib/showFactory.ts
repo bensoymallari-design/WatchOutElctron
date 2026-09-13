@@ -132,7 +132,7 @@ export function localNode(partial?: Partial<ShowNode>): ShowNode {
     gpuLoad: 22,
     ram: 41,
     disk: 12,
-    version: "7.8.15",
+    version: "7.8.16",
     ...partial,
   };
 }
@@ -270,7 +270,7 @@ export function makeDemoShow(): Show {
     duration: 60000,
     color: "#4ade80",
     url: "procedural:ndi",
-    notes: "Connect Camera, Screen, or a stream URL in Assets to replace the generator",
+    notes: "Pick a source with Assets → NDI",
   });
   const sting = emptyAsset({
     name: "Impact Sting",

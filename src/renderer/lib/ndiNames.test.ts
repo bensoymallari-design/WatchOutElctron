@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { collapseSources, friendlyNdiName, tidyNdiName } from "./ndiNames";
+import { collapseSources, friendlyNdiName, mergeNdiLists, tidyNdiName } from "./ndiNames";
 
 test("tidy NDI names drop duplicate parenthetical fragments", () => {
   assert.equal(tidyNdiName("LOCALHOST (Qubit Jhon NDI)(ubit Jhon NDI)"), "LOCALHOST (Qubit Jhon NDI)");
@@ -35,4 +35,14 @@ test("does not merge same-looking names on different IPs", () => {
     { name: "PHONE (NDI HX Camera)", host: "PHONE", port: 5961, ip: "192.168.8.111" },
   ]);
   assert.equal(out.length, 2);
+});
+
+test("mDNS and NDI Runtime lists collapse to one picker row", () => {
+  const out = mergeNdiLists(
+    [{ name: "STUDIO (OBS)", host: "studio", port: 5961, ip: "10.0.0.5" }],
+    [{ name: "STUDIO (OBS)", host: "", port: 0, ip: "10.0.0.5:5961" }],
+  );
+  assert.equal(out.length, 1);
+  assert.equal(out[0].name, "STUDIO (OBS)");
+  assert.equal(out[0].ip, "10.0.0.5:5961");
 });

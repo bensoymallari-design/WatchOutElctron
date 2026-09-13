@@ -297,7 +297,7 @@ export function DevicesWindow() {
                     else void useApp.getState().connectCaptureCard(d.id);
                   }}
                 >
-                  {d.kind === "NDI" ? "NDI Camera Pro" : "Connect"}
+                  {d.kind === "NDI" ? "NDI" : "Connect"}
                 </button>
               )}
             </div>
@@ -305,8 +305,8 @@ export function DevicesWindow() {
         })}
         <p className="px-3 py-2 text-[10px] leading-relaxed text-stone-500">
           Plug every HDMI capture card in (Cam Link, Magewell, AVerMedia…). <b>Find cards</b>, then on each row pick the
-          Display it should fill and <b>Connect</b>. Four cards can go to four controllers. NDI Camera Pro stays on the
-          NDI row.
+          Display it should fill and <b>Connect</b>. Four cards can go to four controllers. The NDI row opens the same
+          source list as Assets → NDI.
         </p>
       </Section>
     </div>
