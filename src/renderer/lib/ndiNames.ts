@@ -64,13 +64,32 @@ function namesRelated(a: string, b: string) {
   return shorter.length >= 8 && longer.startsWith(shorter);
 }
 
+function hostPart(ip?: string) {
+  if (!ip) return "";
+  return ip.replace(/:\d+$/, "").trim().toLowerCase();
+}
+
+function preferIp(a?: string, b?: string) {
+  const x = a || "";
+  const y = b || "";
+  if (y.includes(":") && !x.includes(":")) return y;
+  if (x.includes(":") && !y.includes(":")) return x;
+  return y || x || undefined;
+}
+
 function relatedSource(a: NdiAdvert, b: NdiAdvert) {
   if (namesRelated(a.name, b.name)) {
-    if (a.ip && b.ip && a.ip !== b.ip) return false;
+    const ia = hostPart(a.ip);
+    const ib = hostPart(b.ip);
+    if (ia && ib && ia !== ib) return false;
     return true;
   }
   if (a.host && b.host && a.port && a.port === b.port && a.host.toLowerCase() === b.host.toLowerCase()) return true;
   return false;
+}
+
+export function mergeNdiLists(...lists: NdiAdvert[][]) {
+  return collapseSources(lists.flat());
 }
 
 export function collapseSources(sources: NdiAdvert[]): NdiAdvert[] {
@@ -91,7 +110,7 @@ export function collapseSources(sources: NdiAdvert[]): NdiAdvert[] {
       name: preferName(prev.name, s.name),
       port: s.port || prev.port,
       host: s.host || prev.host,
-      ip: s.ip || prev.ip,
+      ip: preferIp(prev.ip, s.ip),
     };
   }
   return merged.sort((a, b) => a.name.localeCompare(b.name));

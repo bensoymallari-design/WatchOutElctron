@@ -17,7 +17,8 @@ import { emptyCue, emptyDisplay, emptyLayer, emptyShow, emptyTimeline, emptyAsse
 import { makeTween } from "@/lib/tweens";
 import { cueEnd, findCrossfadePair, fittedTimelineDuration, purgeAssets, removeTimelines } from "@/lib/timeline";
 import { formatMs } from "@/lib/time";
-import { connectCamera, connectScreen, connectUrl, disconnectLive, listVideoInputs } from "@/lib/liveSources";
+import { attachNdiCanvas, connectCamera, connectScreen, connectUrl, disconnectLive, listVideoInputs } from "@/lib/liveSources";
+import { friendlyNdiName } from "@/lib/ndiNames";
 import { downloadShow, loadLayouts, loadRecents, loadShowLocal, saveLayouts, saveShowLocal, type RecentShow } from "@/lib/persistence";
 import { fitTransform, displayForCue, wallAsBox, type FitMode } from "@/lib/stageGeometry";
 import { mergeCaptureDevices } from "@/lib/captureCards";
@@ -157,6 +158,7 @@ interface AppActions {
   placeAssetOnDisplay: (assetId: string, displayId: string) => void;
   connectCaptureCard: (captureId: string) => Promise<boolean>;
   disconnectCaptureCard: (captureId: string) => void;
+  connectNdiSource: (sourceName: string) => Promise<boolean>;
   connectLiveSource: (
     assetId: string,
     mode: "camera" | "screen" | "url",
@@ -1397,6 +1399,7 @@ export const useApp = create<AppState & AppActions>((set, get) => ({
 
   deleteAsset: (id) => {
     disconnectLive(id);
+    void window.watchout?.disconnectNdi?.(id);
     set((s) => patchShow(s, (show) => purgeAssets(show, [id])));
     if (get().selection.kind === "asset" && get().selection.ids.includes(id)) {
       get().clearSelection();
@@ -1510,7 +1513,7 @@ export const useApp = create<AppState & AppActions>((set, get) => ({
       duration: 60000,
       color: "#4ade80",
       url: "procedural:ndi",
-      notes: "Live NDI / capture input",
+      notes: "Pick a source with Assets → NDI",
     });
     set((s) =>
       patchShow(s, (doc) => ({ ...doc, assets: [...doc.assets, asset] })),
@@ -1627,6 +1630,34 @@ export const useApp = create<AppState & AppActions>((set, get) => ({
     if (card) get().log(`Disconnected ${card.name}`);
   },
 
+  connectNdiSource: async (sourceName) => {
+    const id = get().ensureNdiAsset();
+    if (!id) return false;
+    if (!window.watchout?.connectNdi) {
+      throw new Error("Desktop NDI API missing — rebuild WatchJhon");
+    }
+    attachNdiCanvas(id);
+    const result = await window.watchout.connectNdi(id, sourceName);
+    if (!result.ok) {
+      const message = result.error || "NDI connect failed";
+      get().log(message, "error");
+      throw new Error(message);
+    }
+    const name = result.name || sourceName;
+    get().updateAsset(id, {
+      name: friendlyNdiName(name),
+      notes: `NDI · ${name}`,
+      codec: "NDI",
+      optimized: true,
+    });
+    set((s) => ({ liveTick: s.liveTick + 1 }));
+    get().log(`NDI connected · ${name}`);
+    const show = get().show;
+    const used = show?.timelines.some((t) => t.cues.some((c) => c.assetId === id));
+    if (!used) get().addCueFromAsset(id);
+    return true;
+  },
+
   connectLiveSource: async (assetId, mode, url, deviceId, opts) => {
     try {
       if (mode === "camera") await connectCamera(assetId, deviceId);
@@ -1642,7 +1673,7 @@ export const useApp = create<AppState & AppActions>((set, get) => ({
             : mode === "camera" && deviceId
               ? "Live capture / camera bound to this input"
               : `Live ${mode} bound to this NDI input`,
-        codec: mode === "camera" ? "Capture · Camera" : mode === "screen" ? "NDI · Screen" : "NDI HX / URL",
+        codec: mode === "camera" ? "Capture · Camera" : mode === "screen" ? "Screen capture" : "NDI HX / URL",
         optimized: true,
         deviceId: deviceId || undefined,
       });

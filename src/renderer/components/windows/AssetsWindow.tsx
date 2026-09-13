@@ -2,7 +2,7 @@
 import { useEffect, useRef, useState } from "react";
 import { useApp } from "@/store/appStore";
 import { formatPlayTime } from "@/lib/time";
-import { getLiveKind, getLiveVideo, subscribeLive } from "@/lib/liveSources";
+import { getLiveKind, getLiveVideo, isLiveReady, subscribeLive } from "@/lib/liveSources";
 import { hasLiveOutputs, subscribeOutputs } from "@/lib/displayOutput";
 import { drawProcedural } from "@/lib/procedural";
 import { FolderPlus, Image as ImageIcon, Film, Music, Radio, Box, Trash2 } from "lucide-react";
@@ -54,7 +54,7 @@ export function AssetsWindow() {
             useApp.getState().setDialog("ndiSource");
           }}
         >
-          Find NDI
+          NDI
         </button>
         <button
           className="rounded bg-[#14532d] px-2 py-0.5 text-emerald-100"
@@ -72,16 +72,7 @@ export function AssetsWindow() {
             if (id) void useApp.getState().connectLiveSource(id, "screen");
           }}
         >
-          NDI Screen
-        </button>
-        <button
-          className="rounded bg-[#14532d] px-2 py-0.5 text-emerald-100"
-          onClick={() => {
-            useApp.getState().ensureNdiAsset();
-            useApp.getState().setDialog("ndiSource");
-          }}
-        >
-          NDI Camera Pro
+          Screen
         </button>
         <button
           className="rounded bg-[#14532d] px-2 py-0.5 text-emerald-100"
@@ -156,7 +147,7 @@ export function AssetsWindow() {
           ))}
           {show.assets.length === 0 && (
             <div className="p-6 text-center text-stone-500">
-              Import media or connect an NDI camera / screen source, then drag onto the Timeline or Stage.
+              Import media or connect NDI / a camera, then drag onto the Timeline or Stage.
             </div>
           )}
         </div>
@@ -216,7 +207,7 @@ function AssetPreview({ asset }: { asset?: Asset }) {
       const live = getLiveVideo(asset.id);
       ctx.fillStyle = "#111";
       ctx.fillRect(0, 0, canvas.width, canvas.height);
-      if (live && live.readyState >= 2) ctx.drawImage(live, 0, 0, canvas.width, canvas.height);
+      if (live && isLiveReady(asset.id)) ctx.drawImage(live, 0, 0, canvas.width, canvas.height);
       else if (asset.kind === "ndi" || asset.kind === "capture" || asset.url.startsWith("procedural:")) {
         const kind = asset.url.startsWith("procedural:") ? asset.url.slice("procedural:".length) : "ndi";
         drawProcedural(ctx, kind, canvas.width, canvas.height, performance.now());

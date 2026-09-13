@@ -1,6 +1,6 @@
 {
   "name": "watchout-electron",
-  "version": "7.8.15",
+  "version": "7.8.16",
   "private": true,
   "description": "Desktop WatchJhon Producer — multi-display show composer with native fullscreen outputs",
   "author": "WatchJhon",
@@ -12,7 +12,7 @@
     "build": "electron-vite build",
     "preview": "electron-vite preview",
     "typecheck": "tsc -p tsconfig.node.json --noEmit && tsc -p tsconfig.web.json --noEmit",
-    "test": "npx --yes tsx --tsconfig tsconfig.web.json --test src/shared/codecs.test.ts src/shared/mediaPolicy.test.ts src/renderer/lib/timeline.test.ts src/renderer/lib/ndiNames.test.ts src/renderer/lib/ndiDiscover.test.ts src/renderer/lib/ndiCameras.test.ts src/renderer/lib/captureCards.test.ts src/renderer/lib/stageGeometry.test.ts src/renderer/lib/playbackAudio.test.ts src/renderer/lib/audioSink.test.ts src/renderer/lib/screenAssign.test.ts src/renderer/lib/time.test.ts src/main/ffmpegBins.test.ts src/main/outputChrome.test.ts",
+    "test": "npx --yes tsx --tsconfig tsconfig.web.json --test src/shared/codecs.test.ts src/shared/mediaPolicy.test.ts src/renderer/lib/timeline.test.ts src/renderer/lib/ndiNames.test.ts src/renderer/lib/ndiDiscover.test.ts src/renderer/lib/ndiCameras.test.ts src/renderer/lib/liveReady.test.ts src/renderer/lib/captureCards.test.ts src/renderer/lib/stageGeometry.test.ts src/renderer/lib/playbackAudio.test.ts src/renderer/lib/audioSink.test.ts src/renderer/lib/screenAssign.test.ts src/renderer/lib/time.test.ts src/main/ffmpegBins.test.ts src/main/outputChrome.test.ts src/main/ndiLibrary.test.ts",
     "pack": "electron-vite build && electron-builder --dir",
     "dist": "electron-vite build && electron-builder",
     "dist:win": "electron-vite build && electron-builder --win nsis",
@@ -28,6 +28,7 @@
     "clsx": "^2.1.1",
     "ffmpeg-static": "^5.3.0",
     "ffprobe-static": "^3.1.0",
+    "koffi": "^3.2.1",
     "lucide-react": "^0.542.0",
     "react": "^19.2.1",
     "react-dom": "^19.2.1",
@@ -59,11 +60,15 @@
       "out/**/*",
       "package.json",
       "node_modules/ffmpeg-static/**",
-      "node_modules/ffprobe-static/**"
+      "node_modules/ffprobe-static/**",
+      "node_modules/koffi/**",
+      "node_modules/@koromix/**"
     ],
     "asarUnpack": [
       "**/ffmpeg-static/**",
-      "**/ffprobe-static/**"
+      "**/ffprobe-static/**",
+      "**/koffi/**",
+      "**/@koromix/**"
     ],
     "extraMetadata": {
       "main": "out/main/index.js"

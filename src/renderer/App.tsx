@@ -1,4 +1,5 @@
 import { useEffect } from "react";
+import { startNdiFrameSink } from "@/lib/liveSources";
 import { Producer } from "@/components/Producer";
 import { WelcomeScreen } from "@/components/WelcomeScreen";
 import { useApp } from "@/store/appStore";
@@ -9,6 +10,7 @@ export function App() {
 
   useEffect(() => {
     boot();
+    startNdiFrameSink();
     window.__woLog = (message, level) => useApp.getState().log(message, level);
   }, [boot]);
 
