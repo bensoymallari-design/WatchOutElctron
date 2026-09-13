@@ -45,7 +45,7 @@ export function AssetsWindow() {
           disabled={!selectedAsset}
           onClick={() => selectedAsset && useApp.getState().deleteAsset(selectedAsset.id)}
         >
-          {selectedAsset && (selectedAsset.kind === "ndi" || selectedAsset.kind === "capture") ? "Delete NDI" : "Delete"}
+          {selectedAsset && (selectedAsset.kind === "ndi" || selectedAsset.kind === "capture") ? "Delete live" : "Delete"}
         </button>
         <button
           className="rounded bg-[#14532d] px-2 py-0.5 text-emerald-100"
@@ -82,6 +82,15 @@ export function AssetsWindow() {
           }}
         >
           NDI Camera Pro
+        </button>
+        <button
+          className="rounded bg-[#14532d] px-2 py-0.5 text-emerald-100"
+          onClick={() => {
+            useApp.getState().focusWindow("devices");
+            void useApp.getState().refreshCaptureCards();
+          }}
+        >
+          Find capture
         </button>
         <span className="ml-auto text-stone-600">Asset Manager · {show.assetManager}</span>
         <input
@@ -135,7 +144,7 @@ export function AssetsWindow() {
               <span className={`h-2 w-2 rounded-full ${getLiveKind(a.id) ? "bg-emerald-400" : a.optimized ? "bg-emerald-700" : "bg-amber-400"}`} />
               <button
                 className="grid h-5 w-5 place-items-center rounded text-stone-500 hover:bg-[#5b1d1d] hover:text-red-100"
-                title={a.kind === "ndi" || a.kind === "capture" ? "Delete NDI" : "Delete asset"}
+                title={a.kind === "ndi" || a.kind === "capture" ? "Delete live" : "Delete asset"}
                 onClick={(e) => {
                   e.stopPropagation();
                   useApp.getState().deleteAsset(a.id);
@@ -168,7 +177,11 @@ export function AssetsWindow() {
             },
             { sep: true },
             {
-              label: show.assets.find((a) => a.id === menu.id)?.kind === "ndi" ? "Delete NDI" : "Delete asset",
+              label:
+                show.assets.find((a) => a.id === menu.id)?.kind === "ndi" ||
+                show.assets.find((a) => a.id === menu.id)?.kind === "capture"
+                  ? "Delete live"
+                  : "Delete asset",
               danger: true,
               shortcut: "Del",
               onClick: () => useApp.getState().deleteAsset(menu.id),

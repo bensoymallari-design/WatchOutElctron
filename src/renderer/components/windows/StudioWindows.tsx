@@ -11,6 +11,7 @@ import {
 } from "@/lib/displayOutput";
 import { listSpeakers, playTestTone, saveSinkId, savedSinkId, type SpeakerOption } from "@/lib/audioOut";
 import { unlockPlaybackAudio } from "@/lib/playbackAudio";
+import { isLiveConnected, subscribeLive } from "@/lib/liveSources";
 
 export function DevicesWindow() {
   const show = useApp((s) => s.show);
@@ -21,6 +22,7 @@ export function DevicesWindow() {
   const [liveTick, setLiveTick] = useState(0);
 
   useEffect(() => subscribeOutputs(() => setLiveTick((n) => n + 1)), []);
+  useEffect(() => subscribeLive(() => setLiveTick((n) => n + 1)), []);
   useEffect(() => {
     void listScreens().then((list) => {
       setScreens(list);
@@ -229,28 +231,83 @@ export function DevicesWindow() {
           If Test beep is silent, pick Speakers (Realtek) instead of HDMI/TV, and unmute Windows. If the beep works but the video is silent, Assets → Rebuild HQ (needs ffmpeg so Electron gets Opus audio).
         </p>
       </Section>
-      <Section title="Capture">
-        {show.captureDevices.map((d) => (
-          <div key={d.id} className="flex items-center justify-between gap-2 border-b border-[#222] px-3 py-1.5">
-            <span>{d.name}</span>
-            <span className="text-stone-500">
-              {d.kind} · {d.signal}
-            </span>
-            <button
-              className="rounded bg-[#14532d] px-2 py-0.5 text-[11px] text-emerald-100"
-              onClick={() => {
-                if (d.kind === "NDI") {
-                  useApp.getState().setDialog("ndiSource");
-                  return;
-                }
-                const id = useApp.getState().ensureNdiAsset();
-                if (id) void useApp.getState().connectLiveSource(id, d.kind === "USB" ? "camera" : "screen");
-              }}
-            >
-              Connect
-            </button>
-          </div>
-        ))}
+      <Section title="Capture cards">
+        <div className="flex items-center justify-between gap-2 border-b border-[#222] px-3 py-1.5">
+          <span className="text-stone-400">
+            {show.captureDevices.filter((d) => d.deviceId).length
+              ? `${show.captureDevices.filter((d) => d.deviceId).length} input(s)`
+              : "HDMI / USB capture"}
+          </span>
+          <button
+            className="rounded bg-[#14532d] px-2 py-0.5 text-[11px] text-emerald-100"
+            onClick={() => void useApp.getState().refreshCaptureCards()}
+          >
+            Find cards
+          </button>
+        </div>
+        {show.captureDevices.map((d) => {
+          const live = !!(d.assetId && isLiveConnected(d.assetId));
+          return (
+            <div key={d.id} className="flex flex-wrap items-center justify-between gap-2 border-b border-[#222] px-3 py-1.5">
+              <div className="min-w-0 flex-1">
+                <div className="truncate">{d.name}</div>
+                <div className="truncate text-[10px] text-stone-500">
+                  {d.kind}
+                  {d.signal && d.signal !== d.name ? ` · ${d.signal}` : ""}
+                  {live ? " · LIVE" : ""}
+                </div>
+              </div>
+              {d.deviceId ? (
+                <>
+                  <select
+                    className="max-w-[160px] rounded bg-[#111] px-1 py-0.5 text-[11px]"
+                    value={d.displayId ?? ""}
+                    onChange={(e) => useApp.getState().assignCaptureDisplay(d.id, e.target.value || undefined)}
+                  >
+                    <option value="">Pick display</option>
+                    {show.displays
+                      .filter((disp) => disp.enabled)
+                      .map((disp) => (
+                        <option key={disp.id} value={disp.id}>
+                          {disp.name}
+                        </option>
+                      ))}
+                  </select>
+                  {live ? (
+                    <button
+                      className="rounded bg-[#333] px-2 py-0.5 text-[11px]"
+                      onClick={() => useApp.getState().disconnectCaptureCard(d.id)}
+                    >
+                      Disconnect
+                    </button>
+                  ) : (
+                    <button
+                      className="rounded bg-[#f5a623] px-2 py-0.5 text-[11px] text-black"
+                      onClick={() => void useApp.getState().connectCaptureCard(d.id)}
+                    >
+                      Connect
+                    </button>
+                  )}
+                </>
+              ) : (
+                <button
+                  className="rounded bg-[#14532d] px-2 py-0.5 text-[11px] text-emerald-100"
+                  onClick={() => {
+                    if (d.kind === "NDI") useApp.getState().setDialog("ndiSource");
+                    else void useApp.getState().connectCaptureCard(d.id);
+                  }}
+                >
+                  {d.kind === "NDI" ? "NDI Camera Pro" : "Connect"}
+                </button>
+              )}
+            </div>
+          );
+        })}
+        <p className="px-3 py-2 text-[10px] leading-relaxed text-stone-500">
+          Plug every HDMI capture card in (Cam Link, Magewell, AVerMedia…). <b>Find cards</b>, then on each row pick the
+          Display it should fill and <b>Connect</b>. Four cards can go to four controllers. NDI Camera Pro stays on the
+          NDI row.
+        </p>
       </Section>
     </div>
   );
