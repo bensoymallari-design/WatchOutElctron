@@ -1,8 +1,8 @@
 import { existsSync } from "node:fs";
 import { join } from "node:path";
-import { nativeImage, utilityProcess, webContents, type UtilityProcess } from "electron";
+import { utilityProcess, webContents, type UtilityProcess } from "electron";
 import { NDI_RUNTIME_URL, resolveNdiLibrary } from "./ndiLibrary";
-import { asNodeBuffer } from "./ndiPixels";
+import { asNodeBuffer, swapRedBlue } from "./ndiPixels";
 import type { NdiAdvert } from "../renderer/lib/ndiNames";
 
 interface Pending {
@@ -26,23 +26,14 @@ function workerFile() {
   return null;
 }
 
-function broadcastJpeg(payload: { assetId: string; jpeg: Buffer; width: number; height: number; sourceName: string }) {
+function broadcastRgba(payload: { assetId: string; rgba: Buffer; width: number; height: number; sourceName: string }) {
   for (const wc of webContents.getAllWebContents()) {
     if (wc.isDestroyed()) continue;
     wc.send("ndi:frame", payload);
   }
 }
 
-function encodeBgra(width: number, height: number, bgra: Buffer) {
-  if (!Number.isFinite(width) || !Number.isFinite(height) || width < 2 || height < 2) return null;
-  if (!bgra || bgra.length < width * height * 4) return null;
-  try {
-    const img = nativeImage.createFromBitmap(bgra, { width, height, scaleFactor: 1 });
-    return img.toJPEG(72);
-  } catch {
-    return null;
-  }
-}
+let loggedEmpty = false;
 
 function onWorkerMessage(msg: Record<string, unknown>) {
   if (msg.op === "ready" || msg.op === "status") {
@@ -63,11 +54,22 @@ function onWorkerMessage(msg: Record<string, unknown>) {
     const width = Number(msg.width);
     const height = Number(msg.height);
     const bgra = asNodeBuffer(msg.bgra);
-    const jpeg = encodeBgra(width, height, bgra);
-    if (!jpeg) return;
-    broadcastJpeg({
+    if (!bgra.length || width < 2 || height < 2 || bgra.length < width * height * 4) {
+      if (!loggedEmpty) {
+        loggedEmpty = true;
+        for (const wc of webContents.getAllWebContents()) {
+          if (wc.isDestroyed()) continue;
+          wc.send("log", {
+            message: `NDI frame arrived empty (${bgra.length} bytes, ${width}×${height}). Helper IPC did not clone pixels.`,
+            level: "warn",
+          });
+        }
+      }
+      return;
+    }
+    broadcastRgba({
       assetId: String(msg.assetId),
-      jpeg,
+      rgba: swapRedBlue(bgra),
       width,
       height,
       sourceName: String(msg.sourceName || ""),
@@ -120,6 +122,14 @@ function ensureWorker() {
       onWorkerMessage(data);
       if (data.op === "ready") finish();
     });
+    child.stderr?.on("data", (buf: Buffer) => {
+      const message = String(buf).trim();
+      if (!message) return;
+      for (const wc of webContents.getAllWebContents()) {
+        if (wc.isDestroyed()) continue;
+        wc.send("log", { message: `NDI helper: ${message}`, level: "warn" });
+      }
+    });
     child.on("exit", () => {
       workerGone("NDI helper stopped. WatchJhon stayed open — open NDI and Connect again.");
     });
@@ -168,6 +178,7 @@ export async function connectNdiRecv(assetId: string, sourceName: string) {
       return { ok: false as const, error: String(msg.error || "Could not connect") };
     }
     connected = String(msg.name || sourceName);
+    loggedEmpty = false;
     return { ok: true as const, name: connected, runtime: true };
   } catch (error) {
     return {

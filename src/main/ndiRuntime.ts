@@ -47,6 +47,8 @@ let lastEncode = 0;
 let onFrame: FrameHandler | null = null;
 let onLog: LogHandler | null = null;
 let loggedFirst = false;
+let connectedAt = 0;
+let triedNullRecv = false;
 
 export function setNdiFrameHandler(fn: FrameHandler | null) {
   onFrame = fn;
@@ -98,8 +100,7 @@ function loadApi(): NdiApi | null {
       p_extra_ips: "str",
     });
     const RecvCreate = koffi.struct("NDIlib_recv_create_v3_t", {
-      p_ndi_name: "str",
-      p_url_address: "str",
+      source_to_connect_to: Source,
       color_format: "int",
       bandwidth: "int",
       allow_video_fields: "bool",
@@ -150,10 +151,12 @@ function loadApi(): NdiApi | null {
       koffi,
     };
     findInst = find_create(null);
-    videoBuf = Buffer.alloc(api.videoSize);
+    videoBuf = Buffer.alloc(Math.max(256, api.videoSize + 64));
+    onLog?.(`NDI Runtime loaded · ${dll}`, "info");
     return api;
-  } catch {
+  } catch (error) {
     api = null;
+    onLog?.(`NDI Runtime failed to load: ${error instanceof Error ? error.message : String(error)}`, "error");
     return null;
   }
 }
@@ -184,18 +187,29 @@ export function listSdkNdiSources(waitMs = 200): NdiAdvert[] {
 function emitFrame(video: { xres: number; yres: number; FourCC?: number; p_data: unknown; line_stride_in_bytes: number }) {
   const loaded = api;
   if (!loaded || !onFrame || !connectedAssetId || !connectedName) return;
-  if (!video.p_data || video.xres < 2 || video.yres < 2) return;
+  const xres = Number(video.xres) || (videoBuf ? videoBuf.readInt32LE(0) : 0);
+  const yres = Number(video.yres) || (videoBuf ? videoBuf.readInt32LE(4) : 0);
+  if (!video.p_data || xres < 2 || yres < 2) {
+    if (!loggedFirst) {
+      loggedFirst = true;
+      onLog?.(
+        `NDI video header was empty (${xres}×${yres}). The Runtime connected but this frame had no pixels.`,
+        "warn",
+      );
+    }
+    return;
+  }
   const stride = video.line_stride_in_bytes || 0;
   const fourcc = Number(video.FourCC || 0) >>> 0;
-  const rowBytes = stride > 0 ? stride : video.xres * 4;
-  const total = rowBytes * video.yres;
+  const rowBytes = stride > 0 ? stride : xres * 4;
+  const total = rowBytes * yres;
   if (total <= 0 || total > 48_000_000) return;
   const viewed = Buffer.from(loaded.koffi.view(video.p_data, total));
-  const packed = videoToBgra(viewed, video.xres, video.yres, rowBytes, fourcc);
-  const scaled = downscaleBgra(packed, video.xres, video.yres, 960);
+  const packed = videoToBgra(viewed, xres, yres, rowBytes, fourcc);
+  const scaled = downscaleBgra(packed, xres, yres, 960);
   if (!loggedFirst) {
     loggedFirst = true;
-    onLog?.(`NDI picture ${video.xres}×${video.yres} ${fourccLabel(fourcc)}`, "info");
+    onLog?.(`NDI picture ${xres}×${yres} ${fourccLabel(fourcc)} — painting Stage`, "info");
   }
   onFrame({
     assetId: connectedAssetId,
@@ -225,12 +239,41 @@ function pump() {
           /* ignore */
         }
       }
-    } else if (kind === 4) {
-      pumping = false;
-      return;
+    } else {
+      const now = Date.now();
+      if (!loggedFirst && now - lastEncode >= 3000) {
+        lastEncode = now;
+        const hint =
+          kind === 4
+            ? "NDI dropped the connection. Is OBS Tools → NDI → Output Settings → Main Output still on?"
+            : `NDI waiting for video from ${connectedName} (capture ${kind}). OBS: Tools → NDI → Output Settings → enable Main Output. You do not need NDI Tools.`;
+        onLog?.(hint, "warn");
+      }
+      if (!loggedFirst && !triedNullRecv && connectedAt && now - connectedAt > 4000 && api && connectedName) {
+        triedNullRecv = true;
+        onLog?.("NDI still no video — retrying with default receiver settings", "warn");
+        try {
+          api.recv_destroy(recvInst);
+        } catch {
+          /* ignore */
+        }
+        const retry = api.recv_create(null);
+        if (retry) {
+          try {
+            api.recv_connect(retry, { p_ndi_name: connectedName, p_url_address: "" });
+          } catch {
+            /* ignore */
+          }
+          recvInst = retry;
+        }
+      }
     }
-  } catch {
-    /* keep pumping */
+  } catch (error) {
+    const now = Date.now();
+    if (now - lastEncode >= 3000) {
+      lastEncode = now;
+      onLog?.(`NDI capture error: ${error instanceof Error ? error.message : String(error)}`, "warn");
+    }
   }
   if (pumping) setTimeout(pump, 8);
 }
@@ -260,7 +303,7 @@ export function disconnectNdiRecv(assetId?: string) {
 }
 
 const MISSING_RUNTIME =
-  "Chromium cannot decode NDI. Install the free NDI Runtime (Resolume/OBS already include it). You do not need NDI Webcam Input. " +
+  "Chromium cannot decode NDI. Install the free NDI Runtime — not NDI Tools or Webcam Input. Resolume/OBS already include it. " +
   NDI_RUNTIME_URL;
 
 export function connectNdiRecv(assetId: string, sourceName: string) {
@@ -272,20 +315,40 @@ export function connectNdiRecv(assetId: string, sourceName: string) {
   const sources = listSdkNdiSources(250);
   const match = pickSource(sources, sourceName);
   const name = match?.name || sourceName;
-  const url = match?.ip || null;
-  // NULL settings avoid a packed-struct mismatch; connect by name. Default format is often UYVY.
-  const recv = loaded.recv_create(null);
+  const url = match?.ip || "";
+  const src = { p_ndi_name: name, p_url_address: url };
+  // BGRA + highest bandwidth. OBS default is UYVY; the Runtime converts when we ask for BGRA.
+  const COLOR_BGRX_BGRA = 1;
+  const BANDWIDTH_HIGHEST = 100;
+  let recv =
+    loaded.recv_create({
+      source_to_connect_to: src,
+      color_format: COLOR_BGRX_BGRA,
+      bandwidth: BANDWIDTH_HIGHEST,
+      allow_video_fields: true,
+      p_ndi_recv_name: "WatchJhon",
+    }) || loaded.recv_create(null);
   if (!recv) {
     return { ok: false as const, error: `Could not connect to ${sourceName}` };
   }
-  loaded.recv_connect(recv, { p_ndi_name: name, p_url_address: url });
+  try {
+    loaded.recv_connect(recv, src);
+  } catch {
+    /* already connected via create settings */
+  }
   recvInst = recv;
   connectedAssetId = assetId;
   connectedName = name;
   loggedFirst = false;
+  lastEncode = 0;
+  connectedAt = Date.now();
+  triedNullRecv = false;
   pumping = true;
   setTimeout(pump, 0);
-  onLog?.(`NDI helper connected to ${name}`, "info");
+  onLog?.(
+    `NDI helper connected to ${name}. Waiting for video — enable OBS Tools → NDI → Main Output. NDI Tools is not required.`,
+    "info",
+  );
   return { ok: true as const, name: connectedName, runtime: true };
 }
 

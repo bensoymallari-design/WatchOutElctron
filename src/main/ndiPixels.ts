@@ -113,12 +113,36 @@ export function downscaleBgra(src: Buffer, width: number, height: number, maxW: 
   return { bgra: out, width: w, height: h };
 }
 
+export function swapRedBlue(src: Buffer) {
+  const out = Buffer.from(src);
+  for (let i = 0; i < out.length; i += 4) {
+    const b = out[i];
+    out[i] = out[i + 2];
+    out[i + 2] = b;
+  }
+  return out;
+}
+
+/** Fresh Uint8Array (not a Node Buffer pool view) so helper IPC clones as binary. */
+export function clonePixels(src: Buffer) {
+  const out = new Uint8Array(src.length);
+  out.set(src);
+  return out;
+}
+
 export function asNodeBuffer(raw: unknown): Buffer {
   if (Buffer.isBuffer(raw)) return raw;
   if (raw instanceof ArrayBuffer) return Buffer.from(raw);
   if (ArrayBuffer.isView(raw)) {
     const v = raw as Uint8Array;
     return Buffer.from(v.buffer, v.byteOffset, v.byteLength);
+  }
+  if (typeof raw === "string" && raw) {
+    try {
+      return Buffer.from(raw, "base64");
+    } catch {
+      return Buffer.alloc(0);
+    }
   }
   if (raw && typeof raw === "object" && Array.isArray((raw as { data?: unknown }).data)) {
     return Buffer.from((raw as { data: number[] }).data);

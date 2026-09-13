@@ -10,20 +10,29 @@ function joinFor(platform: NodeJS.Platform, ...parts: string[]) {
 function winDirs(env: NodeJS.ProcessEnv, joinPath: (...parts: string[]) => string) {
   const pf = env.ProgramFiles || "C:\\Program Files";
   const pf86 = env["ProgramFiles(x86)"] || "C:\\Program Files (x86)";
+  const local = env.LOCALAPPDATA || "";
+  const pathDirs = String(env.PATH || env.Path || "")
+    .split(";")
+    .map((d) => d.trim())
+    .filter(Boolean);
   return [
     env.NDI_RUNTIME_DIR,
     joinPath(pf, "NDI", "NDI 6 Runtime", "v6"),
+    joinPath(pf, "NDI", "NDI Runtime", "v6"),
     joinPath(pf, "NDI", "NDI 5 Runtime", "v5"),
     joinPath(pf, "NDI", "NDI 6 SDK", "Bin", "x64"),
     joinPath(pf, "NDI", "NDI 5 SDK", "Bin", "x64"),
     joinPath(pf, "NDI", "NDI 6 Tools", "Runtime", "v6"),
+    joinPath(pf, "NewTek", "NDI 6 Runtime", "v6"),
     joinPath(pf, "obs-studio", "obs-plugins", "64bit"),
     joinPath(pf, "Resolume Arena 7"),
     joinPath(pf, "Resolume Arena"),
     joinPath(pf, "Resolume Avenue 7"),
     joinPath(pf, "Resolume Avenue"),
+    local && joinPath(local, "NDI", "NDI 6 Runtime", "v6"),
     joinPath(pf86, "NDI", "NDI 6 Runtime", "v6"),
     joinPath(pf86, "NDI", "NDI 5 Runtime", "v5"),
+    ...pathDirs,
   ].filter((d): d is string => !!d);
 }
 

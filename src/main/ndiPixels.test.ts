@@ -2,12 +2,14 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import {
   asNodeBuffer,
+  clonePixels,
   copyBgraRows,
   downscaleBgra,
   FOURCC_BGRA,
   FOURCC_UYVY,
   fourccLabel,
   isBgraFourCC,
+  swapRedBlue,
   uyvyToBgra,
   videoToBgra,
 } from "./ndiPixels";
@@ -48,6 +50,22 @@ test("asNodeBuffer accepts Uint8Array from the NDI helper", () => {
   const raw = Uint8Array.from([1, 2, 3, 4]);
   assert.deepEqual([...asNodeBuffer(raw)], [1, 2, 3, 4]);
   assert.deepEqual([...asNodeBuffer({ data: [9, 8] })], [9, 8]);
+  assert.deepEqual([...asNodeBuffer(Buffer.from([5, 6]).toString("base64"))], [5, 6]);
+});
+
+test("clonePixels is a standalone Uint8Array Stage can paint", () => {
+  const src = Buffer.from([10, 20, 30, 255]);
+  const copy = clonePixels(src);
+  assert.ok(copy instanceof Uint8Array);
+  assert.equal(copy.buffer.byteLength, 4);
+  src[0] = 99;
+  assert.equal(copy[0], 10);
+});
+
+test("swapRedBlue turns BGRA into canvas RGBA", () => {
+  const bgra = Buffer.from([9, 8, 7, 255]);
+  const rgba = swapRedBlue(bgra);
+  assert.deepEqual([...rgba], [7, 8, 9, 255]);
 });
 
 test("downscaleBgra shrinks 1920-wide frames for the Producer", () => {

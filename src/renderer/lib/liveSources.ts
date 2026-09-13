@@ -6,7 +6,8 @@ export type LiveKind = "camera" | "screen" | "url" | "phone" | "ndi";
 
 export interface NdiFramePayload {
   assetId: string;
-  jpeg: Uint8Array | ArrayBuffer | { type?: string; data?: number[] };
+  jpeg?: Uint8Array | ArrayBuffer | { type?: string; data?: number[] };
+  rgba?: Uint8Array | ArrayBuffer | { type?: string; data?: number[] } | string;
   width: number;
   height: number;
   sourceName: string;
@@ -143,16 +144,26 @@ export function attachNdiCanvas(assetId: string) {
   return canvas;
 }
 
-function jpegBytes(jpeg: NdiFramePayload["jpeg"]) {
-  if (jpeg instanceof Uint8Array) return jpeg;
-  if (jpeg instanceof ArrayBuffer) return new Uint8Array(jpeg);
-  if (jpeg && typeof jpeg === "object" && Array.isArray(jpeg.data)) return Uint8Array.from(jpeg.data);
+function pixelBytes(raw: NdiFramePayload["rgba"] | NdiFramePayload["jpeg"]) {
+  if (!raw) return null;
+  if (raw instanceof Uint8Array) return raw;
+  if (raw instanceof ArrayBuffer) return new Uint8Array(raw);
+  if (typeof raw === "string") {
+    try {
+      const bin = atob(raw);
+      const out = new Uint8Array(bin.length);
+      for (let i = 0; i < bin.length; i++) out[i] = bin.charCodeAt(i);
+      return out;
+    } catch {
+      return null;
+    }
+  }
+  if (raw && typeof raw === "object" && Array.isArray(raw.data)) return Uint8Array.from(raw.data);
   return null;
 }
 
 export function applyNdiFrame(payload: NdiFramePayload) {
-  const bytes = jpegBytes(payload.jpeg);
-  if (!bytes || !payload.assetId) return;
+  if (!payload.assetId) return;
   let entry = lives.get(payload.assetId);
   if (!entry || entry.kind !== "ndi" || !entry.canvas) {
     attachNdiCanvas(payload.assetId);
@@ -160,6 +171,26 @@ export function applyNdiFrame(payload: NdiFramePayload) {
   }
   const canvas = entry?.canvas;
   if (!canvas) return;
+  const w = Number(payload.width);
+  const h = Number(payload.height);
+  const rgba = pixelBytes(payload.rgba);
+  if (rgba && w >= 2 && h >= 2 && rgba.length >= w * h * 4) {
+    if (canvas.width !== w || canvas.height !== h) {
+      canvas.width = w;
+      canvas.height = h;
+    }
+    const ctx = canvas.getContext("2d");
+    if (!ctx) return;
+    const clamped = new Uint8ClampedArray(w * h * 4);
+    clamped.set(rgba.subarray(0, clamped.length));
+    ctx.putImageData(new ImageData(clamped, w, h), 0, 0);
+    const current = lives.get(payload.assetId);
+    if (current) current.ready = true;
+    emit();
+    return;
+  }
+  const bytes = pixelBytes(payload.jpeg);
+  if (!bytes) return;
   const blob = new Blob([bytes as BlobPart], { type: "image/jpeg" });
   void createImageBitmap(blob)
     .then((bmp) => {

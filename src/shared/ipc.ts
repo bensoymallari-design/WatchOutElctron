@@ -89,7 +89,8 @@ export interface NdiConnectResult {
 
 export interface NdiFramePayload {
   assetId: string;
-  jpeg: Uint8Array;
+  jpeg?: Uint8Array;
+  rgba?: Uint8Array;
   width: number;
   height: number;
   sourceName: string;
