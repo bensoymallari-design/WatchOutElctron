@@ -72,12 +72,14 @@ export interface NdiScan {
   error?: string;
   runtime?: boolean;
   runtimePath?: string | null;
+  loadError?: string;
 }
 
 export interface NdiStatus {
   runtime: boolean;
   runtimePath: string | null;
   connected: string | null;
+  loadError?: string;
 }
 
 export interface NdiConnectResult {

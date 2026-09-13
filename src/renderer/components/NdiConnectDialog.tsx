@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { useApp } from "@/store/appStore";
-import { friendlyNdiName, type NdiAdvert } from "@/lib/ndiNames";
+import { friendlyNdiName, isNoiseNdiName, type NdiAdvert } from "@/lib/ndiNames";
 import { NDI_RUNTIME_URL } from "@/lib/ndiCameras";
 
 interface DiscoverResponse {
@@ -10,6 +10,7 @@ interface DiscoverResponse {
   error?: string;
   runtime?: boolean;
   runtimePath?: string | null;
+  loadError?: string;
 }
 
 export function NdiConnectDialog() {
@@ -33,7 +34,7 @@ export function NdiConnectDialog() {
     return () => window.clearInterval(timer);
   }, []);
 
-  const found = scan?.sources ?? [];
+  const found = (scan?.sources ?? []).filter((s) => !isNoiseNdiName(s.name));
   const runtime = !!scan?.runtime;
 
   const connect = async (source: NdiAdvert) => {
@@ -53,11 +54,12 @@ export function NdiConnectDialog() {
     <div className="max-h-[86vh] overflow-auto p-4">
       <div className="mb-2 text-sm font-semibold text-[#f5a623]">NDI</div>
       <p className="mb-3 text-[12px] leading-relaxed text-stone-400">
-        Chromium cannot decode NDI itself. DistroAV 6.2 already has NDI 6.3 loaded — you do not need another Runtime
-        download if the box below is green. WatchJhon must load that same NDI 6 DLL (not Resolume’s NDI 5). In OBS keep{" "}
-        <span className="text-stone-200">DistroAV → Main Output</span> on, and put a{" "}
-        <span className="text-stone-200">camera or Color Source</span> on Program. Display Capture of WatchJhon is a
-        loop: Stage stays on NDI PROGRAM rings. After Connect, the asset dot turns green when a picture paints.
+        DistroAV 6.2 already has NDI 6.3 loaded inside OBS — you do{" "}
+        <span className="text-stone-200">not</span> need NDI Tools. Connect{" "}
+        <span className="text-stone-200">HPVS-BPXL-12 (QUBITNDI)</span>, not KeepAliveServer. Keep{" "}
+        <span className="text-stone-200">DistroAV → Main Output</span> on and put a{" "}
+        <span className="text-stone-200">camera or Color Source</span> on Program. Display Capture of
+        WatchJhon is a loop: Stage stays on NDI PROGRAM rings.
       </p>
 
       <div
@@ -69,17 +71,34 @@ export function NdiConnectDialog() {
       >
         {runtime ? (
           <>
-            Runtime found{scan?.runtimePath ? ` · ${scan.runtimePath}` : ""}. You already have it — do{" "}
-            <span className="text-stone-100">not</span> download NDI Runtime or NDI Tools again. OBS Studio does not
-            keep this DLL inside the OBS folder; the obs-ndi plugin uses this same Runtime. Pick a source below.
+            Runtime loaded{scan?.runtimePath ? ` · ${scan.runtimePath}` : ""}. Do{" "}
+            <span className="text-stone-100">not</span> download NDI Runtime or NDI Tools again. Pick{" "}
+            <span className="text-stone-100">QUBITNDI</span> below. KeepAliveServer rows are DistroAV
+            keepalive, not video, and are hidden.
           </>
         ) : (
           <>
-            WatchJhon cannot see the NDI Runtime DLL. OBS Studio does not include it by itself — install the free{" "}
+            WatchJhon cannot load DistroAV’s NDI 6.3 DLL. DistroAV already has it — you do not need NDI
+            Tools.
+            {scan?.loadError ? (
+              <>
+                {" "}
+                <span className="text-amber-50">{scan.loadError}</span>
+              </>
+            ) : (
+              <>
+                {" "}
+                Click DistroAV <span className="text-stone-100">Get NDI Library</span>, then fully quit
+                WatchJhon (not just Close) and reopen so it can read{" "}
+                <span className="text-stone-100">NDI_RUNTIME_DIR_V6</span>. Splash must say{" "}
+                <span className="text-stone-100">PRODUCER 7.8.23</span>.
+              </>
+            )}{" "}
+            Only if DistroAV itself cannot load NDI, install the free{" "}
             <button className="text-[#f5a623] underline" onClick={() => void window.watchout?.openExternal(NDI_RUNTIME_URL)}>
               NDI Runtime
-            </button>{" "}
-            (not NDI Tools). Then restart WatchJhon.
+            </button>
+            .
           </>
         )}
       </div>
@@ -96,8 +115,10 @@ export function NdiConnectDialog() {
         )}
         {!scanning && found.length === 0 && (
           <div className="text-stone-400">
-            No NDI source yet. Turn on OBS <span className="text-stone-200">Tools → NDI → Output</span> (or Resolume / NDI
-            Camera), same LAN, then Scan again. Allow WatchJhon through Windows Firewall on a Private network.
+            No video NDI source yet. DistroAV KeepAliveServer rows are hidden on purpose. In OBS keep{" "}
+            <span className="text-stone-200">DistroAV → Main Output</span> on (
+            <span className="text-stone-200">QUBITNDI</span>), put a camera or Color Source on Program,
+            then Scan again. Allow WatchJhon through Windows Firewall on a Private network.
           </div>
         )}
         {found.map((s) => (

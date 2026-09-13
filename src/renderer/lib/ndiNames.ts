@@ -33,6 +33,16 @@ export function tidyNdiName(name: string) {
   return n.trim();
 }
 
+/** DistroAV keepalive endpoints are discoverable but never send video. */
+export function isNoiseNdiName(name: string) {
+  const n = tidyNdiName(name);
+  if (!n) return true;
+  if (/^keepalive/i.test(n)) return true;
+  if (/keepaliveserver/i.test(n)) return true;
+  if (/^\d+$/.test(n)) return true;
+  return false;
+}
+
 /** NDI instance names are often `HOSTNAME (Source name)`. */
 export function friendlyNdiName(name: string) {
   const n = tidyNdiName(name);
@@ -95,7 +105,7 @@ export function mergeNdiLists(...lists: NdiAdvert[][]) {
 export function collapseSources(sources: NdiAdvert[]): NdiAdvert[] {
   const cleaned = sources
     .map((s) => ({ ...s, name: tidyNdiName(s.name) }))
-    .filter((s) => s.name.length > 2 && !s.name.startsWith("_"));
+    .filter((s) => s.name.length > 2 && !s.name.startsWith("_") && !isNoiseNdiName(s.name));
   const merged: NdiAdvert[] = [];
   for (const s of cleaned) {
     const idx = merged.findIndex((m) => relatedSource(m, s));

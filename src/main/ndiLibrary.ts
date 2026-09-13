@@ -1,3 +1,4 @@
+import { execFileSync } from "node:child_process";
 import { existsSync } from "node:fs";
 import { posix, win32 } from "node:path";
 
@@ -7,17 +8,69 @@ function joinFor(platform: NodeJS.Platform, ...parts: string[]) {
   return (platform === "win32" ? win32 : posix).join(...parts);
 }
 
-function winDirs(env: NodeJS.ProcessEnv, joinPath: (...parts: string[]) => string) {
+export function parseRegEnvValue(output: string, valueName: string) {
+  const needle = valueName.toUpperCase();
+  for (const line of output.split(/\r?\n/)) {
+    const trimmed = line.trim();
+    if (!trimmed.toUpperCase().includes(needle)) continue;
+    const m = trimmed.match(/REG_(?:EXPAND_)?SZ\s+(.+)$/i);
+    if (m) return m[1].trim().replace(/^"|"$/g, "");
+  }
+  return null;
+}
+
+/** DistroAV's NDI installer writes REG_EXPAND_SZ like `%ProgramFiles%\NDI\NDI 6 Runtime\v6`. */
+export function expandWinEnv(value: string, env: NodeJS.ProcessEnv = process.env) {
+  return value.replace(/%([^%]+)%/g, (_, name: string) => {
+    const hit = env[name] ?? env[name.toUpperCase()] ?? env[name.toLowerCase()];
+    return hit || `%${name}%`;
+  });
+}
+
+export function readWindowsNdiDirs(
+  query: (key: string, value: string) => string | null = queryRegistryValue,
+  env: NodeJS.ProcessEnv = process.env,
+) {
+  const keys: [string, string][] = [
+    ["HKLM\\SYSTEM\\CurrentControlSet\\Control\\Session Manager\\Environment", "NDI_RUNTIME_DIR_V6"],
+    ["HKLM\\SYSTEM\\CurrentControlSet\\Control\\Session Manager\\Environment", "NDI_RUNTIME_DIR"],
+    ["HKCU\\Environment", "NDI_RUNTIME_DIR_V6"],
+    ["HKCU\\Environment", "NDI_RUNTIME_DIR"],
+  ];
+  const out: string[] = [];
+  for (const [key, value] of keys) {
+    const dir = query(key, value);
+    if (dir) out.push(expandWinEnv(dir, env));
+  }
+  return out;
+}
+
+function queryRegistryValue(key: string, value: string) {
+  if (process.platform !== "win32") return null;
+  try {
+    const text = execFileSync("reg.exe", ["query", key, "/v", value], {
+      encoding: "utf8",
+      timeout: 4000,
+      windowsHide: true,
+    });
+    return parseRegEnvValue(text, value);
+  } catch {
+    return null;
+  }
+}
+
+function winDirs(env: NodeJS.ProcessEnv, joinPath: (...parts: string[]) => string, extraDirs: string[]) {
   const pf = env.ProgramFiles || "C:\\Program Files";
   const pf86 = env["ProgramFiles(x86)"] || "C:\\Program Files (x86)";
   const local = env.LOCALAPPDATA || "";
+  const roaming = env.APPDATA || "";
+  const data = env.ProgramData || "C:\\ProgramData";
   const pathDirs = String(env.PATH || env.Path || "")
     .split(";")
     .map((d) => d.trim())
     .filter(Boolean);
-  // DistroAV 6.2+ loads NDI 6.3 from NDI_RUNTIME_DIR_V6 = "...\NDI 6 Tools\Runtime"
-  // (no v6 subfolder). Prefer that over Resolume's older NDI 5 DLL.
   const ndi6 = [
+    ...extraDirs.map((d) => expandWinEnv(d, env)),
     env.NDI_RUNTIME_DIR_V6,
     env.NDI_RUNTIME_DIR,
     joinPath(pf, "NDI", "NDI 6 Tools", "Runtime"),
@@ -27,8 +80,12 @@ function winDirs(env: NodeJS.ProcessEnv, joinPath: (...parts: string[]) => strin
     joinPath(pf, "NDI", "NDI 6 Tools", "Runtime", "v6"),
     joinPath(pf, "NewTek", "NDI 6 Runtime", "v6"),
     joinPath(pf, "obs-studio", "obs-plugins", "64bit"),
+    joinPath(data, "obs-studio", "plugin_config", "DistroAV"),
+    joinPath(data, "obs-studio", "plugins", "distroav"),
+    roaming && joinPath(roaming, "obs-studio", "plugin_config", "DistroAV"),
     local && joinPath(local, "NDI", "NDI 6 Runtime", "v6"),
     joinPath(pf86, "NDI", "NDI 6 Runtime", "v6"),
+    joinPath(pf86, "NDI", "NDI 6 Tools", "Runtime"),
   ];
   const older = [
     joinPath(pf, "NDI", "NDI 5 Runtime", "v5"),
@@ -42,11 +99,15 @@ function winDirs(env: NodeJS.ProcessEnv, joinPath: (...parts: string[]) => strin
   return [...ndi6, ...older, ...pathDirs].filter((d): d is string => !!d);
 }
 
-export function ndiLibraryCandidates(platform = process.platform, env: NodeJS.ProcessEnv = process.env) {
+export function ndiLibraryCandidates(
+  platform = process.platform,
+  env: NodeJS.ProcessEnv = process.env,
+  extraDirs: string[] = [],
+) {
   const joinPath = (...parts: string[]) => joinFor(platform, ...parts);
   if (platform === "win32") {
     const names = ["Processing.NDI.Lib.x64.dll", "Processing.NDI.Lib.dll"];
-    return winDirs(env, joinPath).flatMap((dir) => names.map((name) => joinPath(dir, name)));
+    return winDirs(env, joinPath, extraDirs).flatMap((dir) => names.map((name) => joinPath(dir, name)));
   }
   if (platform === "darwin") {
     return [
@@ -67,6 +128,8 @@ export function resolveNdiLibrary(
   platform = process.platform,
   env: NodeJS.ProcessEnv = process.env,
   exists = existsSync,
+  extraDirs?: string[],
 ) {
-  return ndiLibraryCandidates(platform, env).find((p) => exists(p)) ?? null;
+  const extras = extraDirs ?? (platform === "win32" ? readWindowsNdiDirs() : []);
+  return ndiLibraryCandidates(platform, env, extras).find((p) => exists(p)) ?? null;
 }
