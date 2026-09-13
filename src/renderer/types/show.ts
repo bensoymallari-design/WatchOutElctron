@@ -184,6 +184,8 @@ export interface Asset {
   bytes?: number;
   linked?: boolean;
   posterUrl?: string;
+  /** Bound capture-card / camera deviceId from enumerateDevices. */
+  deviceId?: string;
 }
 
 export interface Display {
@@ -238,8 +240,13 @@ export interface CaptureDevice {
   id: string;
   name: string;
   nodeId: string;
-  kind: "NDI" | "USB" | "SDI" | "VNC";
+  kind: "NDI" | "USB" | "SDI" | "VNC" | "HDMI";
   signal: string;
+  /** Windows/macOS videoinput id for a capture card or camera. */
+  deviceId?: string;
+  /** Stage Display this card fills when Connect is pressed. */
+  displayId?: string;
+  assetId?: string;
 }
 
 export interface ShowVariable {

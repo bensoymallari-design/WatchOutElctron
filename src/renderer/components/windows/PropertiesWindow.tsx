@@ -38,7 +38,7 @@ export function PropertiesWindow() {
               className="rounded bg-[#5b1d1d] px-2 py-1 text-[11px] text-red-100"
               onClick={() => useApp.getState().deleteAsset(a.id)}
             >
-              {a.kind === "ndi" || a.kind === "capture" ? "Delete NDI" : "Delete asset"}
+              {a.kind === "ndi" || a.kind === "capture" ? "Delete live" : "Delete asset"}
             </button>
           </div>
         </Panel>

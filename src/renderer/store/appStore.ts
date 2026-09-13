@@ -16,9 +16,10 @@ import { uid } from "@/lib/ids";
 import { emptyCue, emptyDisplay, emptyLayer, emptyShow, emptyTimeline, emptyAsset, makeDemoShow } from "@/lib/showFactory";
 import { makeTween } from "@/lib/tweens";
 import { cueEnd, findCrossfadePair, purgeAssets, removeTimelines } from "@/lib/timeline";
-import { connectCamera, connectScreen, connectUrl, disconnectLive } from "@/lib/liveSources";
+import { connectCamera, connectScreen, connectUrl, disconnectLive, listVideoInputs } from "@/lib/liveSources";
 import { downloadShow, loadLayouts, loadRecents, loadShowLocal, saveLayouts, saveShowLocal, type RecentShow } from "@/lib/persistence";
 import { fitTransform, displayForCue, wallAsBox, type FitMode } from "@/lib/stageGeometry";
+import { mergeCaptureDevices } from "@/lib/captureCards";
 import { listScreens, openDisplayOutput, preferredOutputScreen } from "@/lib/displayOutput";
 import { layoutDisplaysOnScreens, screenForDisplay } from "@/lib/screenAssign";
 import { needsHqRebuild } from "../../shared/codecs";
@@ -149,7 +150,18 @@ interface AppActions {
   setFpsNow: (n: number) => void;
   toggleMessages: () => void;
   ensureNdiAsset: () => string | null;
-  connectLiveSource: (assetId: string, mode: "camera" | "screen" | "url", url?: string, deviceId?: string) => Promise<boolean>;
+  refreshCaptureCards: () => Promise<void>;
+  assignCaptureDisplay: (captureId: string, displayId: string | undefined) => void;
+  placeAssetOnDisplay: (assetId: string, displayId: string) => void;
+  connectCaptureCard: (captureId: string) => Promise<boolean>;
+  disconnectCaptureCard: (captureId: string) => void;
+  connectLiveSource: (
+    assetId: string,
+    mode: "camera" | "screen" | "url",
+    url?: string,
+    deviceId?: string,
+    opts?: { skipCue?: boolean; displayId?: string },
+  ) => Promise<boolean>;
 }
 
 function snapshot(show: Show | null) {
@@ -1484,7 +1496,115 @@ export const useApp = create<AppState & AppActions>((set, get) => ({
     return asset.id;
   },
 
-  connectLiveSource: async (assetId, mode, url, deviceId) => {
+  refreshCaptureCards: async () => {
+    const show = get().show;
+    if (!show) return;
+    const inputs = await listVideoInputs();
+    set((s) =>
+      patchShow(s, (doc) => ({
+        ...doc,
+        captureDevices: mergeCaptureDevices(doc.captureDevices, inputs, doc.displays.filter((d) => d.enabled)),
+      })),
+    );
+    const n = get().show?.captureDevices.filter((d) => d.deviceId).length ?? 0;
+    get().log(
+      n
+        ? `Found ${n} capture input${n === 1 ? "" : "s"}. Pick a Display on each row, then Connect.`
+        : "No capture cards listed. Plug HDMI/USB capture in, allow camera access, then Find cards again.",
+      n ? "info" : "warn",
+    );
+  },
+
+  assignCaptureDisplay: (captureId, displayId) => {
+    set((s) =>
+      patchShow(s, (show) => ({
+        ...show,
+        captureDevices: show.captureDevices.map((d) => (d.id === captureId ? { ...d, displayId } : d)),
+      })),
+    );
+    const card = get().show?.captureDevices.find((d) => d.id === captureId);
+    if (card?.assetId && displayId) get().placeAssetOnDisplay(card.assetId, displayId);
+  },
+
+  placeAssetOnDisplay: (assetId, displayId) => {
+    const show = get().show;
+    if (!show) return;
+    const cue = show.timelines.flatMap((t) => t.cues).find((c) => c.assetId === assetId && c.type === "media");
+    const display = show.displays.find((d) => d.id === displayId);
+    const asset = show.assets.find((a) => a.id === assetId);
+    if (!display || !asset) return;
+    if (cue) {
+      const fit = fitTransform(asset, display, "cover");
+      get().updateCue(cue.id, { position: fit.position, scale: fit.scale });
+      get().select({ kind: "cue", ids: [cue.id] });
+      get().log(`Moved ${asset.name} onto ${display.name}`);
+      return;
+    }
+    get().addCueFromAsset(assetId, undefined, undefined, { displayId });
+  },
+
+  connectCaptureCard: async (captureId) => {
+    const show = get().show;
+    if (!show) return false;
+    const card = show.captureDevices.find((d) => d.id === captureId);
+    if (!card) return false;
+    if (card.kind === "NDI" && !card.deviceId) {
+      get().setDialog("ndiSource");
+      return false;
+    }
+    if (!card.deviceId) {
+      get().log("That row has no Windows camera id — Find cards first", "warn");
+      return false;
+    }
+    let assetId = card.assetId && show.assets.some((a) => a.id === card.assetId) ? card.assetId : undefined;
+    if (!assetId) {
+      const existing = show.assets.find((a) => a.kind === "capture" && a.deviceId === card.deviceId);
+      assetId = existing?.id;
+    }
+    if (!assetId) {
+      const asset = emptyAsset({
+        name: card.name,
+        kind: "capture",
+        codec: `${card.kind} capture`,
+        duration: 60000,
+        color: "#38bdf8",
+        url: "procedural:ndi",
+        notes: `Capture card · ${card.name}`,
+        deviceId: card.deviceId,
+      });
+      set((s) =>
+        patchShow(s, (doc) => ({
+          ...doc,
+          assets: [...doc.assets, asset],
+          captureDevices: doc.captureDevices.map((d) => (d.id === captureId ? { ...d, assetId: asset.id } : d)),
+        })),
+      );
+      assetId = asset.id;
+    } else {
+      set((s) =>
+        patchShow(s, (doc) => ({
+          ...doc,
+          captureDevices: doc.captureDevices.map((d) => (d.id === captureId ? { ...d, assetId } : d)),
+        })),
+      );
+    }
+    const ok = await get().connectLiveSource(assetId, "camera", undefined, card.deviceId, { skipCue: true });
+    if (!ok) return false;
+    const displayId = card.displayId ?? get().show?.displays.find((d) => d.enabled)?.id;
+    if (displayId) get().placeAssetOnDisplay(assetId, displayId);
+    const displayName = get().show?.displays.find((d) => d.id === displayId)?.name ?? "Stage";
+    get().log(`Capture ${card.name} → ${displayName}`);
+    return true;
+  },
+
+  disconnectCaptureCard: (captureId) => {
+    const card = get().show?.captureDevices.find((d) => d.id === captureId);
+    if (card?.assetId) disconnectLive(card.assetId);
+    set((s) => ({ liveTick: s.liveTick + 1 }));
+    if (card) get().log(`Disconnected ${card.name}`);
+  },
+
+  connectLiveSource: async (assetId, mode, url, deviceId, opts) => {
     try {
       if (mode === "camera") await connectCamera(assetId, deviceId);
       else if (mode === "screen") await connectScreen(assetId);
@@ -1497,19 +1617,22 @@ export const useApp = create<AppState & AppActions>((set, get) => ({
           mode === "url"
             ? `Live URL · ${url}`
             : mode === "camera" && deviceId
-              ? "Live NDI Webcam / camera bound to this input"
+              ? "Live capture / camera bound to this input"
               : `Live ${mode} bound to this NDI input`,
-        codec: mode === "camera" ? "NDI · Camera" : mode === "screen" ? "NDI · Screen" : "NDI HX / URL",
+        codec: mode === "camera" ? "Capture · Camera" : mode === "screen" ? "NDI · Screen" : "NDI HX / URL",
         optimized: true,
+        deviceId: deviceId || undefined,
       });
       set((s) => ({ liveTick: s.liveTick + 1 }));
-      get().log(`NDI source connected (${mode})`);
+      get().log(`Live source connected (${mode})`);
       const show = get().show;
       const used = show?.timelines.some((t) => t.cues.some((c) => c.assetId === assetId));
-      if (!used) get().addCueFromAsset(assetId);
+      if (!used && !opts?.skipCue) {
+        get().addCueFromAsset(assetId, undefined, undefined, opts?.displayId ? { displayId: opts.displayId } : undefined);
+      }
       return true;
     } catch (error) {
-      const message = error instanceof Error ? error.message : "NDI connect failed";
+      const message = error instanceof Error ? error.message : "Live connect failed";
       get().log(message, "error");
       return false;
     }
