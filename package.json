@@ -1,6 +1,6 @@
 {
   "name": "watchout-electron",
-  "version": "7.8.24",
+  "version": "7.8.25",
   "private": true,
   "description": "Desktop WatchJhon Producer — multi-display show composer with native fullscreen outputs",
   "author": "WatchJhon",
@@ -69,7 +69,7 @@
       "**/ffprobe-static/**",
       "**/koffi/**",
       "**/@koromix/**",
-      "**/out/main/ndiWorker.*"
+      "**/out/main/**"
     ],
     "extraMetadata": {
       "main": "out/main/index.js"
