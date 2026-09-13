@@ -15,25 +15,31 @@ function winDirs(env: NodeJS.ProcessEnv, joinPath: (...parts: string[]) => strin
     .split(";")
     .map((d) => d.trim())
     .filter(Boolean);
-  return [
+  // DistroAV 6.2+ loads NDI 6.3 from NDI_RUNTIME_DIR_V6 = "...\NDI 6 Tools\Runtime"
+  // (no v6 subfolder). Prefer that over Resolume's older NDI 5 DLL.
+  const ndi6 = [
+    env.NDI_RUNTIME_DIR_V6,
     env.NDI_RUNTIME_DIR,
+    joinPath(pf, "NDI", "NDI 6 Tools", "Runtime"),
     joinPath(pf, "NDI", "NDI 6 Runtime", "v6"),
     joinPath(pf, "NDI", "NDI Runtime", "v6"),
-    joinPath(pf, "NDI", "NDI 5 Runtime", "v5"),
     joinPath(pf, "NDI", "NDI 6 SDK", "Bin", "x64"),
-    joinPath(pf, "NDI", "NDI 5 SDK", "Bin", "x64"),
     joinPath(pf, "NDI", "NDI 6 Tools", "Runtime", "v6"),
     joinPath(pf, "NewTek", "NDI 6 Runtime", "v6"),
     joinPath(pf, "obs-studio", "obs-plugins", "64bit"),
+    local && joinPath(local, "NDI", "NDI 6 Runtime", "v6"),
+    joinPath(pf86, "NDI", "NDI 6 Runtime", "v6"),
+  ];
+  const older = [
+    joinPath(pf, "NDI", "NDI 5 Runtime", "v5"),
+    joinPath(pf, "NDI", "NDI 5 SDK", "Bin", "x64"),
+    joinPath(pf86, "NDI", "NDI 5 Runtime", "v5"),
     joinPath(pf, "Resolume Arena 7"),
     joinPath(pf, "Resolume Arena"),
     joinPath(pf, "Resolume Avenue 7"),
     joinPath(pf, "Resolume Avenue"),
-    local && joinPath(local, "NDI", "NDI 6 Runtime", "v6"),
-    joinPath(pf86, "NDI", "NDI 6 Runtime", "v6"),
-    joinPath(pf86, "NDI", "NDI 5 Runtime", "v5"),
-    ...pathDirs,
-  ].filter((d): d is string => !!d);
+  ];
+  return [...ndi6, ...older, ...pathDirs].filter((d): d is string => !!d);
 }
 
 export function ndiLibraryCandidates(platform = process.platform, env: NodeJS.ProcessEnv = process.env) {
