@@ -1,7 +1,7 @@
 import { createRequire } from "node:module";
 import { dirname } from "node:path";
 import { NDI_RUNTIME_URL, resolveNdiLibrary } from "./ndiLibrary";
-import { downscaleBgra, fourccLabel, videoToBgra } from "./ndiPixels";
+import { NDI_OUTPUT_MAX_WIDTH, downscaleBgra, fourccLabel, videoToBgra } from "./ndiPixels";
 import {
   NDI_FRAME_ERROR,
   NDI_FRAME_VIDEO,
@@ -338,10 +338,13 @@ function emitFrame(video: { xres?: unknown; yres?: unknown; FourCC?: unknown; p_
     return;
   }
   const packed = videoToBgra(viewed, xres, yres, rowBytes, fourcc);
-  const scaled = downscaleBgra(packed, xres, yres, 960);
+  const scaled = downscaleBgra(packed, xres, yres, NDI_OUTPUT_MAX_WIDTH);
   if (!loggedFirst) {
     loggedFirst = true;
-    onLog?.(`NDI picture ${xres}×${yres} ${fourccLabel(fourcc)} — painting Stage`, "info");
+    onLog?.(
+      `NDI picture ${xres}×${yres} ${fourccLabel(fourcc)} — Output ${scaled.width}×${scaled.height} (sender resolution)`,
+      "info",
+    );
   }
   onFrame({
     assetId: connectedAssetId,

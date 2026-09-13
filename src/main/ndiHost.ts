@@ -1,6 +1,6 @@
 import { existsSync } from "node:fs";
 import { join } from "node:path";
-import { nativeImage, utilityProcess, webContents, type UtilityProcess } from "electron";
+import { utilityProcess, webContents, type UtilityProcess } from "electron";
 import { asarUnpackedPath, preferPackedPath } from "./ffmpegBins";
 import { NDI_RUNTIME_URL, isBenignHelperStderr, pinNdiRuntimeOnEnv, resolveNdiLibrary } from "./ndiLibrary";
 import { asNodeBuffer, clonePixels, swapRedBlue } from "./ndiPixels";
@@ -30,17 +30,6 @@ function workerFile() {
 function prepareInheritedEnv() {
   runtimePath = resolveNdiLibrary();
   pinNdiRuntimeOnEnv(process.env, runtimePath);
-}
-
-function jpegBase64(width: number, height: number, bgra: Buffer) {
-  try {
-    const img = nativeImage.createFromBitmap(bgra, { width, height, scaleFactor: 1 });
-    const jpeg = img.toJPEG(70);
-    if (jpeg && jpeg.length > 32) return jpeg.toString("base64");
-  } catch {
-    /* renderer still paints RGBA */
-  }
-  return "";
 }
 
 function broadcastFrame(payload: {
@@ -95,7 +84,8 @@ function onWorkerMessage(msg: Record<string, unknown>) {
     broadcastFrame({
       assetId: String(msg.assetId),
       rgba: clonePixels(swapRedBlue(bgra)),
-      jpegBase64: jpegBase64(width, height, bgra),
+      // Skip JPEG at 1080p/4K — RGBA is what Stage and Output paint. JPEG was a contextBridge fallback.
+      jpegBase64: "",
       width,
       height,
       sourceName: String(msg.sourceName || ""),
