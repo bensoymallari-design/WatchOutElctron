@@ -2,6 +2,7 @@ import { existsSync } from "node:fs";
 import { join } from "node:path";
 import { nativeImage, utilityProcess, webContents, type UtilityProcess } from "electron";
 import { NDI_RUNTIME_URL, resolveNdiLibrary } from "./ndiLibrary";
+import { asNodeBuffer } from "./ndiPixels";
 import type { NdiAdvert } from "../renderer/lib/ndiNames";
 
 interface Pending {
@@ -35,8 +36,12 @@ function broadcastJpeg(payload: { assetId: string; jpeg: Buffer; width: number; 
 function encodeBgra(width: number, height: number, bgra: Buffer) {
   if (!Number.isFinite(width) || !Number.isFinite(height) || width < 2 || height < 2) return null;
   if (!bgra || bgra.length < width * height * 4) return null;
-  const img = nativeImage.createFromBitmap(bgra, { width, height, scaleFactor: 1 });
-  return img.toJPEG(72);
+  try {
+    const img = nativeImage.createFromBitmap(bgra, { width, height, scaleFactor: 1 });
+    return img.toJPEG(72);
+  } catch {
+    return null;
+  }
 }
 
 function onWorkerMessage(msg: Record<string, unknown>) {
@@ -45,11 +50,19 @@ function onWorkerMessage(msg: Record<string, unknown>) {
     runtimePath = (msg.runtimePath as string | null) ?? runtimePath;
     if ("connected" in msg) connected = (msg.connected as string | null) ?? connected;
   }
+  if (msg.op === "log") {
+    const message = String(msg.message || "");
+    const level = (msg.level as "info" | "warn" | "error") || "info";
+    for (const wc of webContents.getAllWebContents()) {
+      if (wc.isDestroyed()) continue;
+      wc.send("log", { message, level });
+    }
+    return;
+  }
   if (msg.op === "frame") {
     const width = Number(msg.width);
     const height = Number(msg.height);
-    const raw = msg.bgra;
-    const bgra = Buffer.isBuffer(raw) ? raw : Buffer.from((raw as Uint8Array) ?? []);
+    const bgra = asNodeBuffer(msg.bgra);
     const jpeg = encodeBgra(width, height, bgra);
     if (!jpeg) return;
     broadcastJpeg({

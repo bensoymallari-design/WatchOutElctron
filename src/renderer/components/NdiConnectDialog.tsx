@@ -55,7 +55,10 @@ export function NdiConnectDialog() {
       <p className="mb-3 text-[12px] leading-relaxed text-stone-400">
         Chromium cannot decode NDI itself. WatchJhon uses the same{" "}
         <span className="text-stone-200">NDI Runtime</span> DLL that Resolume and OBS already have on this PC. You do{" "}
-        <span className="text-stone-200">not</span> need NDI Webcam Input or NDI Tools.
+        <span className="text-stone-200">not</span> need NDI Webcam Input or NDI Tools. In OBS, turn on{" "}
+        <span className="text-stone-200">Tools → NDI → Output</span> for a camera or a scene that is{" "}
+        <span className="text-stone-200">not</span> Display Capture of WatchJhon, or Stage will only show WatchJhon
+        looking at itself.
       </p>
 
       <div
