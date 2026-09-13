@@ -53,15 +53,15 @@ npm run dist:win
 
 The installer is:
 
-`release/WatchJhon-Setup-7.8.18.exe`
+`release/WatchJhon-Setup-7.8.19.exe`
 
-Double-click it. It adds **WatchJhon** to the Start Menu and desktop. That `.exe` is what you copy to other PCs. The splash screen must say **PRODUCER 7.8.18**. The header also shows **7.8.18**.
+Double-click it. It adds **WatchJhon** to the Start Menu and desktop. That `.exe` is what you copy to other PCs. The splash screen must say **PRODUCER 7.8.19**. The header also shows **7.8.19**. Do not stash `package.json` before the build — that keeps the old splash version.
 
 If `electron` is missing after install (the `install scripts not yet covered by allowScripts` warning), run the three `approve` commands, then `npm install` again, then `npm run dist:win`.
 
 ```bash
 git checkout main
-git pull
+git pull origin main
 npm install
 npm run dist:win
 ```
