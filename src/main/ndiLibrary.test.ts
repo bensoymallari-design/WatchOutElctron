@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { expandWinEnv, ndiLibraryCandidates, parseRegEnvValue, pinNdiRuntimeOnEnv, resolveNdiLibrary, sanitizeUtilityProcessEnv } from "./ndiLibrary";
+import { expandWinEnv, isBenignHelperStderr, ndiLibraryCandidates, parseRegEnvValue, pinNdiRuntimeOnEnv, resolveNdiLibrary, sanitizeUtilityProcessEnv } from "./ndiLibrary";
 
 test("Windows NDI Runtime and Resolume folders are searched for the SDK dll", () => {
   const paths = ndiLibraryCandidates("win32", {
@@ -103,4 +103,12 @@ test("pinNdiRuntimeOnEnv prefixes PATH with the DistroAV Runtime folder", () => 
   pinNdiRuntimeOnEnv(env, "C:\\Program Files\\NDI\\NDI 6 Runtime\\v6\\Processing.NDI.Lib.x64.dll", "win32");
   assert.equal(env.NDI_RUNTIME_DIR_V6, "C:\\Program Files\\NDI\\NDI 6 Runtime\\v6");
   assert.ok(env.PATH?.startsWith("C:\\Program Files\\NDI\\NDI 6 Runtime\\v6;"));
+});
+
+test("missing NDI_RUNTIME_DIR_V6 registry keys are not helper failures", () => {
+  assert.equal(
+    isBenignHelperStderr("ERROR: The system was unable to find the specified registry key or value."),
+    true,
+  );
+  assert.equal(isBenignHelperStderr("koffi could not load it: Unexpected Object value, expected void *"), false);
 });

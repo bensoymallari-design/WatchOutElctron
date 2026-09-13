@@ -52,6 +52,7 @@ function queryRegistryValue(key: string, value: string) {
       encoding: "utf8",
       timeout: 4000,
       windowsHide: true,
+      stdio: ["ignore", "pipe", "pipe"],
     });
     return parseRegEnvValue(text, value);
   } catch {
@@ -130,8 +131,14 @@ export function resolveNdiLibrary(
   exists = existsSync,
   extraDirs?: string[],
 ) {
-  const extras = extraDirs ?? (platform === "win32" ? readWindowsNdiDirs() : []);
+  const haveEnv = !!(env.NDI_RUNTIME_DIR_V6 || env.NDI_RUNTIME_DIR);
+  const extras = extraDirs ?? (platform === "win32" && !haveEnv ? readWindowsNdiDirs(undefined, env) : []);
   return ndiLibraryCandidates(platform, env, extras).find((p) => exists(p)) ?? null;
+}
+
+/** reg.exe prints this to stderr when NDI_RUNTIME_DIR_V6 is unset; it is not a Runtime failure. */
+export function isBenignHelperStderr(message: string) {
+  return /unable to find the specified registry key/i.test(message);
 }
 
 /** Put DistroAV's Runtime folder on PATH / NDI_RUNTIME_DIR_V6 so the helper inherits it. */

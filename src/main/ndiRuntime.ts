@@ -110,8 +110,8 @@ function loadApi(): NdiApi | null {
     });
     koffi.struct("NDIlib_find_create_t", {
       show_local_sources: "bool",
-      p_groups: "str",
-      p_extra_ips: "str",
+      p_groups: "char *",
+      p_extra_ips: "char *",
     });
     const RecvCreate = koffi.struct("NDIlib_recv_create_v3_t", {
       source_to_connect_to: Source,
@@ -151,7 +151,8 @@ function loadApi(): NdiApi | null {
       }
     }
     const initialize = tryFunc(lib, "int NDIlib_initialize()") as (() => number) | null;
-    const find_create = lib.func("void *NDIlib_find_create_v2(void *p_create_settings)");
+    const find_create = (tryFunc(lib, "void *NDIlib_find_create_v2(NDIlib_find_create_t *p_create_settings)") ??
+      lib.func("void *NDIlib_find_create_v2(void *p_create_settings)")) as NdiApi["find_create"];
     const find_wait = lib.func("int NDIlib_find_wait_for_sources(void *p_instance, uint32_t timeout_in_ms)");
     const find_sources = lib.func("void *NDIlib_find_get_current_sources(void *p_instance, _Out_ uint32_t *p_no_sources)");
     const recv_create = lib.func("void *NDIlib_recv_create_v3(NDIlib_recv_create_v3_t *p_create_settings)");
@@ -191,7 +192,18 @@ function loadApi(): NdiApi | null {
       koffi,
     };
     api = loadedApi;
-    findInst = find_create({ show_local_sources: true, p_groups: null, p_extra_ips: null }) || find_create(null);
+    try {
+      findInst = find_create({ show_local_sources: true, p_groups: null, p_extra_ips: null });
+    } catch {
+      findInst = null;
+    }
+    if (!findInst) {
+      try {
+        findInst = find_create(null);
+      } catch {
+        findInst = null;
+      }
+    }
     videoBuf = Buffer.alloc(Math.max(256, loadedApi.videoSize + 64));
     onLog?.(`NDI Runtime loaded · ${dll}`, "info");
     return loadedApi;

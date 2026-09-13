@@ -89,7 +89,7 @@ export function NdiConnectDialog() {
               <>
                 {" "}
                 WatchJhon’s helper has not loaded it yet. Splash must say{" "}
-                <span className="text-stone-100">PRODUCER 7.8.25</span>. Fully quit WatchJhon and reopen this
+                <span className="text-stone-100">PRODUCER 7.8.26</span>. Fully quit WatchJhon and reopen this
                 installer.
               </>
             )}
