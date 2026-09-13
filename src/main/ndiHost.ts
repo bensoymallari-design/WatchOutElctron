@@ -1,8 +1,8 @@
 import { existsSync } from "node:fs";
-import { dirname, join } from "node:path";
+import { join } from "node:path";
 import { nativeImage, utilityProcess, webContents, type UtilityProcess } from "electron";
 import { asarUnpackedPath } from "./ffmpegBins";
-import { NDI_RUNTIME_URL, resolveNdiLibrary } from "./ndiLibrary";
+import { NDI_RUNTIME_URL, pinNdiRuntimeOnEnv, resolveNdiLibrary } from "./ndiLibrary";
 import { asNodeBuffer, clonePixels, swapRedBlue } from "./ndiPixels";
 import type { NdiAdvert } from "../renderer/lib/ndiNames";
 
@@ -17,6 +17,7 @@ const pending = new Map<number, Pending>();
 let runtime = false;
 let runtimePath: string | null = resolveNdiLibrary();
 let loadError: string | undefined;
+let lastHelperError = "";
 let connected: string | null = null;
 let starting: Promise<void> | null = null;
 
@@ -29,19 +30,9 @@ function workerFile() {
   return null;
 }
 
-function helperEnv(): NodeJS.ProcessEnv {
-  const env: NodeJS.ProcessEnv = { ...process.env };
-  const dll = resolveNdiLibrary();
-  if (dll) {
-    const dir = dirname(dll);
-    env.NDI_RUNTIME_DIR_V6 = env.NDI_RUNTIME_DIR_V6 || dir;
-    env.PATH = `${dir}${process.platform === "win32" ? ";" : ":"}${env.PATH || ""}`;
-  }
-  const unpacked = join(process.resourcesPath || "", "app.asar.unpacked", "node_modules");
-  const fromWorker = asarUnpackedPath(join(__dirname, "..", "..", "node_modules"));
-  const parts = [unpacked, fromWorker, env.NODE_PATH].filter(Boolean);
-  env.NODE_PATH = parts.join(process.platform === "win32" ? ";" : ":");
-  return env;
+function prepareInheritedEnv() {
+  runtimePath = resolveNdiLibrary();
+  pinNdiRuntimeOnEnv(process.env, runtimePath);
 }
 
 function jpegBase64(width: number, height: number, bgra: Buffer) {
@@ -126,6 +117,7 @@ function workerGone(message: string) {
   child = null;
   connected = null;
   runtime = false;
+  lastHelperError = message;
   for (const job of pending.values()) job.reject(new Error(message));
   pending.clear();
   for (const wc of webContents.getAllWebContents()) {
@@ -141,42 +133,68 @@ function ensureWorker() {
     const file = workerFile();
     if (!file) {
       starting = null;
-      reject(new Error("NDI helper script missing"));
+      lastHelperError = "NDI helper script missing from the WatchJhon install.";
+      reject(new Error(lastHelperError));
       return;
     }
-    try {
-      child = utilityProcess.fork(file, [], {
-        serviceName: "WatchJhon NDI",
-        stdio: "pipe",
-        env: helperEnv(),
-      });
-    } catch (error) {
-      starting = null;
-      reject(error instanceof Error ? error : new Error("NDI helper failed to start"));
-      return;
-    }
-    const finish = () => {
-      if (!starting) return;
+    let settled = false;
+    const succeed = () => {
+      if (settled) return;
+      settled = true;
       starting = null;
       resolve();
     };
+    const fail = (error: Error) => {
+      if (settled) return;
+      settled = true;
+      starting = null;
+      lastHelperError = error.message;
+      child = null;
+      reject(error);
+    };
+    try {
+      // Do not pass `env: { ...process.env }`. On Windows that copy includes cmd.exe
+      // keys like `=C:` and Electron throws / immediately kills the utility process.
+      prepareInheritedEnv();
+      child = utilityProcess.fork(file, [], { serviceName: "WatchJhon NDI", stdio: "pipe" });
+      lastHelperError = "";
+    } catch (error) {
+      fail(
+        new Error(
+          `NDI helper failed to start: ${error instanceof Error ? error.message : String(error)}. DistroAV already has ${runtimePath || "the NDI 6 DLL"} — you do not need NDI Tools.`,
+        ),
+      );
+      return;
+    }
+    if (!child) {
+      fail(new Error("NDI helper failed to start. DistroAV already has the NDI 6 DLL — you do not need NDI Tools."));
+      return;
+    }
     child.on("message", (msg) => {
       const data = msg as Record<string, unknown>;
       onWorkerMessage(data);
-      if (data.op === "ready") finish();
+      if (data.op === "ready") succeed();
     });
     child.stderr?.on("data", (buf: Buffer) => {
       const message = String(buf).trim();
       if (!message) return;
+      lastHelperError = message;
       for (const wc of webContents.getAllWebContents()) {
         if (wc.isDestroyed()) continue;
         wc.send("log", { message: `NDI helper: ${message}`, level: "warn" });
       }
     });
-    child.on("exit", () => {
-      workerGone("NDI helper stopped. WatchJhon stayed open — open NDI and Connect again.");
+    child.on("exit", (code) => {
+      const dll = runtimePath ?? resolveNdiLibrary();
+      const detail = lastHelperError && !lastHelperError.startsWith("NDI helper") ? ` (${lastHelperError})` : "";
+      const message = `NDI helper stopped${code != null ? ` (exit ${code})` : ""}${detail}. The NDI DLL is at ${dll || "the DistroAV Runtime folder"} — you do not need NDI Tools. Open NDI and Connect again.`;
+      workerGone(message);
+      fail(new Error(message));
     });
-    setTimeout(finish, 800);
+    setTimeout(() => {
+      if (child?.pid) succeed();
+      else fail(new Error(lastHelperError || "NDI helper failed to start"));
+    }, 800);
   });
   return starting;
 }
@@ -186,7 +204,7 @@ function call(op: string, extra: Record<string, unknown> = {}, timeoutMs = 8000)
     () =>
       new Promise<Record<string, unknown>>((resolve, reject) => {
         if (!child) {
-          reject(new Error("NDI helper failed to start"));
+          reject(new Error(lastHelperError || "NDI helper failed to start"));
           return;
         }
         const id = nextId++;
@@ -202,7 +220,9 @@ function call(op: string, extra: Record<string, unknown> = {}, timeoutMs = 8000)
 }
 
 export function startNdiHelper() {
-  void ensureWorker().catch(() => undefined);
+  void ensureWorker().catch((error) => {
+    lastHelperError = error instanceof Error ? error.message : String(error);
+  });
 }
 
 export async function listSdkNdiSources(waitMs = 200) {
@@ -229,7 +249,7 @@ export async function connectNdiRecv(assetId: string, sourceName: string) {
       error:
         error instanceof Error
           ? error.message
-          : "NDI helper failed. Chromium cannot share a process with the NDI DLL.",
+          : lastHelperError || "NDI helper failed. Chromium cannot share a process with the NDI DLL.",
     };
   }
 }
@@ -249,8 +269,9 @@ export function ndiStatus() {
     loadError: runtime
       ? undefined
       : loadError ||
+        lastHelperError ||
         (dll
-          ? `NDI Runtime is at ${dll} but the WatchJhon helper has not loaded it yet. Fully quit WatchJhon and reopen it.`
+          ? `NDI Runtime is at ${dll} but the WatchJhon helper has not loaded it yet.`
           : "WatchJhon cannot find Processing.NDI.Lib.x64.dll. DistroAV already loaded NDI 6.3 — click DistroAV Get NDI Library, then fully quit WatchJhon so it can read NDI_RUNTIME_DIR_V6."),
   };
 }

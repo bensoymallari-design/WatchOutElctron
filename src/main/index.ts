@@ -160,10 +160,10 @@ function bindIpc() {
   });
 
   ipcMain.handle("ndi:discover", async () => {
-    const status = ndiStatus();
     try {
       const mdns = await discoverNdiSources(4500);
-      const sdk = status.runtime ? await listSdkNdiSources(400) : [];
+      const sdk = await listSdkNdiSources(400);
+      const status = ndiStatus();
       return {
         sources: mergeNdiLists(mdns, sdk),
         lan: lanIPv4(),
@@ -173,8 +173,9 @@ function bindIpc() {
         loadError: status.loadError,
       };
     } catch (error) {
+      const status = ndiStatus();
       return {
-        sources: status.runtime ? await listSdkNdiSources(400) : [],
+        sources: await listSdkNdiSources(400).catch(() => []),
         lan: lanIPv4(),
         ok: false,
         error: error instanceof Error ? error.message : "NDI scan failed",
