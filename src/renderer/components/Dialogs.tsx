@@ -65,8 +65,8 @@ function GridDialog() {
 function AboutDialog() {
   return (
     <div className="p-5">
-      <div className="text-2xl font-black tracking-[0.2em] text-[#f5a623]">WATCHOUT</div>
-      <div className="mt-1 text-stone-400">WATCHOUT Producer 7.8.14 — desktop edition</div>
+      <div className="text-2xl font-black tracking-[0.2em] text-[#f5a623]">WatchJhon</div>
+      <div className="mt-1 text-stone-400">WatchJhon Producer 7.8.15 — desktop edition</div>
       <p className="mt-3 text-[12px] leading-relaxed text-stone-400">
         Multi-display show composer with Stage, Timeline, Assets, Devices, Nodes, Variables and Cue control.
         Runner outputs are native fullscreen windows bound to OS monitors. H.264 / HAP / ProRes need a VP9+Opus

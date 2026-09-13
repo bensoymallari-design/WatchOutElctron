@@ -33,10 +33,10 @@ export async function rememberShow(path: string, name: string, id: string) {
 
 export async function openShowDialog(win: BrowserWindow | null) {
   const result = await dialog.showOpenDialog(win ?? (undefined as unknown as BrowserWindow), {
-    title: "Open WATCHOUT show",
+    title: "Open WatchJhon show",
     properties: ["openFile"],
     filters: [
-      { name: "WATCHOUT Show", extensions: ["watch.json", "json"] },
+      { name: "WatchJhon Show", extensions: ["watch.json", "json"] },
       { name: "All files", extensions: ["*"] },
     ],
   });
@@ -55,9 +55,9 @@ export async function saveShowDialog(win: BrowserWindow | null, json: string, de
     return existingPath;
   }
   const result = await dialog.showSaveDialog(win ?? (undefined as unknown as BrowserWindow), {
-    title: "Save WATCHOUT show",
+    title: "Save WatchJhon show",
     defaultPath: `${defaultName.replace(/\s+/g, "_")}.watch.json`,
-    filters: [{ name: "WATCHOUT Show", extensions: ["watch.json", "json"] }],
+    filters: [{ name: "WatchJhon Show", extensions: ["watch.json", "json"] }],
   });
   if (result.canceled || !result.filePath) return null;
   const dest = result.filePath.endsWith(".json") ? result.filePath : `${result.filePath}.watch.json`;

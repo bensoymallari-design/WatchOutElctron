@@ -70,7 +70,7 @@ export function NdiConnectDialog() {
     const devices = navigator.mediaDevices;
     const onChange = () => refreshCameras();
     devices?.addEventListener?.("devicechange", onChange);
-    const timer = window.setInterval(() => scanLan(false), 4000);
+    const timer = window.setInterval(() => scanLan(false), 2000);
     return () => {
       devices?.removeEventListener?.("devicechange", onChange);
       window.clearInterval(timer);
@@ -199,21 +199,24 @@ function NdiProTab({
     <div className="space-y-3 text-[12px] leading-relaxed">
       <p className="rounded border border-amber-700/70 bg-[#1a1408] p-2 text-amber-100">
         Do <span className="font-semibold">not</span> scan the QR inside{" "}
-        <span className="font-semibold">NDI Camera Pro</span>. That app is an NDI sender — it has no WatchOut join
+        <span className="font-semibold">NDI Camera Pro</span>. That app is an NDI sender — it has no WatchJhon join
         scanner. Keep NDI Camera Pro open and streaming on the phone.
       </p>
 
       <section className="rounded border border-[#333] bg-[#141414] p-2">
         <div className="mb-1 flex items-center justify-between gap-2">
-          <div className="text-[10px] uppercase tracking-wider text-stone-500">1. Phone NDI sources on this LAN</div>
+          <div className="text-[10px] uppercase tracking-wider text-stone-500">1. NDI sources on this network</div>
           <button className="rounded bg-[#333] px-2 py-0.5 text-[11px]" onClick={onRefreshNdi}>
             {scanning ? "Scanning…" : "Scan again"}
           </button>
         </div>
-        {scanning && found.length === 0 && <div className="text-stone-500">Looking for _ndi._tcp advertisements…</div>}
+        {scanning && found.length === 0 && (
+          <div className="text-stone-500">Listening for OBS, Resolume, cameras, and other NDI senders…</div>
+        )}
         {!scanning && found.length === 0 && (
           <div className="text-stone-400">
-            No NDI name yet. Same Wi‑Fi (not Guest / AP isolation), NDI Camera Pro streaming, then Scan again.
+            No NDI source yet. Turn on OBS <span className="text-stone-200">Tools → NDI → Output</span> (or Resolume /
+            NDI Camera Pro), same LAN, then Scan again. Allow WatchJhon through Windows Firewall on a Private network.
           </div>
         )}
         {found.map((s) => (
@@ -236,14 +239,14 @@ function NdiProTab({
           2. NDI Webcam on this Windows PC (required)
         </div>
         <p className="mb-2 text-stone-400">
-          Chromium cannot decode native NDI. Install free{" "}
+          Chromium cannot decode native NDI. When a source appears above, install free{" "}
           <button
             className="text-[#f5a623] underline"
             onClick={() => void window.watchout?.openExternal(NDI_TOOLS_URL)}
           >
             NDI Tools
           </button>
-          , open <span className="text-stone-200">NDI Webcam Input</span>, and pick the phone source above. It then
+          , open <span className="text-stone-200">NDI Webcam Input</span>, and pick that OBS / camera source. It then
           appears as a camera here.
         </p>
         <div className="mb-2 flex flex-wrap gap-1">

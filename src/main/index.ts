@@ -16,7 +16,7 @@ import {
 } from "./outputWindows";
 import { autosave, loadRecents, openShowDialog, readShowFile, rememberShow, saveShowDialog } from "./shows";
 import { startSignalServer } from "./signaling";
-import { discoverNdiSources, lanIPv4 } from "../renderer/lib/ndiDiscover";
+import { discoverNdiSources, lanIPv4, startNdiFinder, stopNdiFinder } from "../renderer/lib/ndiDiscover";
 import type { ClockPayload, ImportedMedia, OpenOutputOptions } from "../shared/ipc";
 
 registerMediaScheme();
@@ -43,7 +43,7 @@ function createMainWindow() {
     minWidth: 1100,
     minHeight: 720,
     backgroundColor: "#0e0e0e",
-    title: "WATCHOUT 7 — Producer",
+    title: "WatchJhon — Producer",
     autoHideMenuBar: true,
     webPreferences: {
       preload: preloadPath(),
@@ -159,7 +159,7 @@ function bindIpc() {
 
   ipcMain.handle("ndi:discover", async () => {
     try {
-      const sources = await discoverNdiSources(2600);
+      const sources = await discoverNdiSources(4500);
       return { sources, lan: lanIPv4(), ok: true };
     } catch (error) {
       return {
@@ -200,7 +200,8 @@ app.whenReady().then(() => {
   });
   session.defaultSession.setPermissionCheckHandler(() => true);
   startSignalServer();
-  if (process.platform === "win32") app.setAppUserModelId("com.watchout.producer");
+  startNdiFinder();
+  if (process.platform === "win32") app.setAppUserModelId("com.watchjhon.producer");
   blocker = powerSaveBlocker.start("prevent-display-sleep");
   powerSaveBlocker.start("prevent-app-suspension");
   initOutputs({
@@ -218,6 +219,7 @@ app.whenReady().then(() => {
 
 app.on("window-all-closed", () => {
   if (blocker != null) powerSaveBlocker.stop(blocker);
+  stopNdiFinder();
   if (process.platform !== "darwin") app.quit();
 });
 

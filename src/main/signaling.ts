@@ -62,13 +62,13 @@ function json(res: ServerResponse, data: unknown, status = 200) {
 
 const camPage = (room: string) => `<!doctype html>
 <html><head><meta charset="utf-8"/><meta name="viewport" content="width=device-width,initial-scale=1"/>
-<title>WATCHOUT phone camera</title>
+<title>WatchJhon phone camera</title>
 <style>
 body{margin:0;background:#111;color:#eee;font:14px sans-serif;padding:16px}
 button{background:#f5a623;border:0;padding:10px 16px;margin:6px 6px 0 0;cursor:pointer}
 video{width:100%;max-width:480px;background:#000;margin-top:12px}
 </style></head><body>
-<h1>WATCHOUT · phone camera</h1>
+<h1>WatchJhon · phone camera</h1>
 <p id="s">Tap Start to send this camera to Producer.</p>
 <button id="start">Start</button>
 <button id="flip">Flip camera</button>
