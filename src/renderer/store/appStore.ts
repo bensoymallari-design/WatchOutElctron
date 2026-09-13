@@ -15,7 +15,8 @@ import { defaultLayout, liveLayout, programmingLayout } from "@/lib/layout";
 import { uid } from "@/lib/ids";
 import { emptyCue, emptyDisplay, emptyLayer, emptyShow, emptyTimeline, emptyAsset, makeDemoShow } from "@/lib/showFactory";
 import { makeTween } from "@/lib/tweens";
-import { cueEnd, findCrossfadePair, purgeAssets, removeTimelines } from "@/lib/timeline";
+import { cueEnd, findCrossfadePair, fittedTimelineDuration, purgeAssets, removeTimelines } from "@/lib/timeline";
+import { formatMs } from "@/lib/time";
 import { connectCamera, connectScreen, connectUrl, disconnectLive, listVideoInputs } from "@/lib/liveSources";
 import { downloadShow, loadLayouts, loadRecents, loadShowLocal, saveLayouts, saveShowLocal, type RecentShow } from "@/lib/persistence";
 import { fitTransform, displayForCue, wallAsBox, type FitMode } from "@/lib/stageGeometry";
@@ -139,6 +140,7 @@ interface AppActions {
   addTimeline: () => void;
   deleteTimeline: (id: string) => void;
   updateTimeline: (id: string, partial: Partial<Timeline>) => void;
+  fitTimelineToMedia: (timelineId?: string) => void;
   updateShowPrefs: (partial: Partial<Show["prefs"]>) => void;
   updateVariable: (id: string, partial: Partial<Show["variables"][number]>) => void;
   addVariable: () => void;
@@ -1440,6 +1442,27 @@ export const useApp = create<AppState & AppActions>((set, get) => ({
         timelines: show.timelines.map((t) => (t.id === id ? { ...t, ...partial } : t)),
       })),
     ),
+
+  fitTimelineToMedia: (timelineId) => {
+    const show = get().show;
+    if (!show) return;
+    const id = timelineId ?? get().activeTimelineId;
+    const tl = show.timelines.find((t) => t.id === id) ?? activeTimeline(show, get().activeTimelineId);
+    if (!tl) return;
+    const next = fittedTimelineDuration(tl.cues, show.assets);
+    if (next == null) {
+      get().log("No playback clips to fit — drop a video on the Timeline first", "warn");
+      return;
+    }
+    if (Math.round(tl.duration) === next) {
+      get().updateTimeline(tl.id, { loop: true, playhead: Math.min(tl.playhead, next) });
+      get().log(`Timeline already ${formatMs(next)} — last clip end. Loop on.`);
+      return;
+    }
+    get().updateTimeline(tl.id, { duration: next, loop: true, playhead: Math.min(tl.playhead, next) });
+    get().setTimelineView(Math.max(0.004, 900 / Math.max(1, next)), 0);
+    get().log(`Timeline fitted to last clip end ${formatMs(next)} — Loop has no empty tail`);
+  },
 
   updateShowPrefs: (partial) =>
     set((s) => patchShow(s, (show) => ({ ...show, prefs: { ...show.prefs, ...partial } }))),

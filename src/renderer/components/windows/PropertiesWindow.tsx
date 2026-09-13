@@ -66,7 +66,14 @@ export function PropertiesWindow() {
         <Num label="Rate" value={tl.rate} step={0.1} onChange={(v) => useApp.getState().updateTimeline(tl.id, { rate: v })} />
         <Check label="Loop" checked={tl.loop} onChange={(v) => useApp.getState().updateTimeline(tl.id, { loop: v })} />
         <Check label="Enabled" checked={tl.enabled} onChange={(v) => useApp.getState().updateTimeline(tl.id, { enabled: v })} />
-        <div className="mt-2">
+        <div className="mt-2 flex flex-wrap gap-2">
+          <button
+            className="rounded bg-[#f5a623] px-2 py-1 text-[11px] text-black"
+            title="Set timeline length to the last video/image clip so Loop has no empty tail"
+            onClick={() => useApp.getState().fitTimelineToMedia(tl.id)}
+          >
+            Fit to media
+          </button>
           <button
             className="rounded bg-[#5b1d1d] px-2 py-1 text-[11px] text-red-100"
             onClick={() => useApp.getState().deleteTimeline(tl.id)}
