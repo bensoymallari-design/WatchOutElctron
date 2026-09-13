@@ -132,7 +132,12 @@ export function AssetsWindow() {
                   {!a.optimized && a.kind === "video" ? " · building HQ" : ""}
                 </div>
               </div>
-              <span className={`h-2 w-2 rounded-full ${getLiveKind(a.id) ? "bg-emerald-400" : a.optimized ? "bg-emerald-700" : "bg-amber-400"}`} />
+              <span
+                className={`h-2 w-2 rounded-full ${
+                  isLiveReady(a.id) ? "bg-emerald-400" : getLiveKind(a.id) ? "bg-amber-400" : a.optimized ? "bg-emerald-700" : "bg-amber-400"
+                }`}
+                title={isLiveReady(a.id) ? "Picture" : getLiveKind(a.id) ? "Connected — waiting for video" : undefined}
+              />
               <button
                 className="grid h-5 w-5 place-items-center rounded text-stone-500 hover:bg-[#5b1d1d] hover:text-red-100"
                 title={a.kind === "ndi" || a.kind === "capture" ? "Delete live" : "Delete asset"}

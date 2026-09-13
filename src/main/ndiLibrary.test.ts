@@ -10,7 +10,16 @@ test("Windows NDI Runtime and Resolume folders are searched for the SDK dll", ()
   assert.ok(paths.some((p) => p.includes("NDI 6 Runtime") && p.endsWith("Processing.NDI.Lib.x64.dll")));
   assert.ok(paths.some((p) => p.includes("Resolume Arena")));
   assert.ok(paths.some((p) => p.includes("obs-studio")));
+  assert.ok(paths.some((p) => p.includes("NDI Runtime") || p.includes("NewTek")));
   assert.equal(paths[0], "D:\\NDI\\Processing.NDI.Lib.x64.dll");
+});
+
+test("Windows PATH folders are searched for the Runtime dll", () => {
+  const paths = ndiLibraryCandidates("win32", {
+    ProgramFiles: "C:\\Program Files",
+    PATH: "E:\\NDIRuntime",
+  });
+  assert.ok(paths.some((p) => p.replace(/\\/g, "/").endsWith("E:/NDIRuntime/Processing.NDI.Lib.x64.dll")));
 });
 
 test("resolveNdiLibrary returns the first path that exists", () => {

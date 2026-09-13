@@ -53,12 +53,13 @@ export function NdiConnectDialog() {
     <div className="max-h-[86vh] overflow-auto p-4">
       <div className="mb-2 text-sm font-semibold text-[#f5a623]">NDI</div>
       <p className="mb-3 text-[12px] leading-relaxed text-stone-400">
-        Chromium cannot decode NDI itself. WatchJhon uses the same{" "}
-        <span className="text-stone-200">NDI Runtime</span> DLL that Resolume and OBS already have on this PC. You do{" "}
-        <span className="text-stone-200">not</span> need NDI Webcam Input or NDI Tools. In OBS, turn on{" "}
-        <span className="text-stone-200">Tools → NDI → Output</span> for a camera or a scene that is{" "}
-        <span className="text-stone-200">not</span> Display Capture of WatchJhon, or Stage will only show WatchJhon
-        looking at itself.
+        Chromium cannot decode NDI itself. WatchJhon uses the free{" "}
+        <span className="text-stone-200">NDI Runtime</span> DLL (Resolume and OBS already have it). You do{" "}
+        <span className="text-stone-200">not</span> need NDI Tools, NDI Webcam Input, or Studio Monitor. In OBS open{" "}
+        <span className="text-stone-200">Tools → NDI → Output Settings</span> and enable{" "}
+        <span className="text-stone-200">Main Output</span> for a camera or a scene that is{" "}
+        <span className="text-stone-200">not</span> Display Capture of WatchJhon. After Connect, the asset dot turns
+        green when a picture is painting. Amber means connected but still waiting for video.
       </p>
 
       <div

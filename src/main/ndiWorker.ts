@@ -1,3 +1,4 @@
+import { clonePixels } from "./ndiPixels";
 import {
   connectNdiRecv,
   disconnectNdiRecv,
@@ -27,7 +28,7 @@ setNdiFrameHandler((frame) => {
     sourceName: frame.sourceName,
     width: frame.width,
     height: frame.height,
-    bgra: new Uint8Array(frame.bgra),
+    bgra: clonePixels(frame.bgra),
   });
 });
 
