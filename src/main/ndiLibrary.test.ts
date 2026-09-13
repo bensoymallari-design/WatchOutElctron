@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { ndiLibraryCandidates, resolveNdiLibrary } from "./ndiLibrary";
+import { expandWinEnv, ndiLibraryCandidates, parseRegEnvValue, resolveNdiLibrary } from "./ndiLibrary";
 
 test("Windows NDI Runtime and Resolume folders are searched for the SDK dll", () => {
   const paths = ndiLibraryCandidates("win32", {
@@ -53,4 +53,32 @@ test("resolveNdiLibrary returns the first path that exists", () => {
   );
   assert.ok(found?.includes("Resolume Arena 7"));
   assert.equal(resolveNdiLibrary("win32", { ProgramFiles: "C:\\Program Files" }, () => false), null);
+});
+
+test("registry REG_EXPAND_SZ NDI_RUNTIME_DIR_V6 is parsed and expanded", () => {
+  const text = `
+HKEY_LOCAL_MACHINE\\SYSTEM\\CurrentControlSet\\Control\\Session Manager\\Environment
+    NDI_RUNTIME_DIR_V6    REG_EXPAND_SZ    %ProgramFiles%\\NDI\\NDI 6 Tools\\Runtime
+`;
+  assert.equal(parseRegEnvValue(text, "NDI_RUNTIME_DIR_V6"), "%ProgramFiles%\\NDI\\NDI 6 Tools\\Runtime");
+  assert.equal(
+    expandWinEnv("%ProgramFiles%\\NDI\\NDI 6 Tools\\Runtime", { ProgramFiles: "C:\\Program Files" }),
+    "C:\\Program Files\\NDI\\NDI 6 Tools\\Runtime",
+  );
+});
+
+test("registry extraDirs are preferred over Resolume NDI 5", () => {
+  const found = resolveNdiLibrary(
+    "win32",
+    { ProgramFiles: "C:\\Program Files" },
+    (p) => String(p).includes("NDI 6 Tools") || String(p).includes("Resolume"),
+    ["C:\\Program Files\\NDI\\NDI 6 Tools\\Runtime"],
+  );
+  assert.ok(found?.includes("NDI 6 Tools"));
+  assert.ok(found && !found.includes("Resolume"));
+});
+
+test("DistroAV plugin_config folder is searched", () => {
+  const paths = ndiLibraryCandidates("win32", { ProgramFiles: "C:\\Program Files", ProgramData: "C:\\ProgramData" });
+  assert.ok(paths.some((p) => p.includes("plugin_config") && p.includes("DistroAV")));
 });

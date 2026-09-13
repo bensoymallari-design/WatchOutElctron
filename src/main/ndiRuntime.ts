@@ -2,7 +2,7 @@ import { createRequire } from "node:module";
 import { dirname } from "node:path";
 import { NDI_RUNTIME_URL, resolveNdiLibrary } from "./ndiLibrary";
 import { downscaleBgra, fourccLabel, videoToBgra } from "./ndiPixels";
-import { collapseSources, type NdiAdvert } from "../renderer/lib/ndiNames";
+import { collapseSources, isNoiseNdiName, type NdiAdvert } from "../renderer/lib/ndiNames";
 
 const require = createRequire(import.meta.url);
 
@@ -49,6 +49,7 @@ let onLog: LogHandler | null = null;
 let loggedFirst = false;
 let connectedAt = 0;
 let triedNullRecv = false;
+let lastLoadError = "";
 
 export function setNdiFrameHandler(fn: FrameHandler | null) {
   onFrame = fn;
@@ -70,10 +71,13 @@ function pinDllDirectory(koffi: Koffi, dll: string) {
   if (process.platform !== "win32") return;
   const dir = dirname(dll);
   process.env.PATH = `${dir};${process.env.PATH || ""}`;
+  process.env.NDI_RUNTIME_DIR_V6 = process.env.NDI_RUNTIME_DIR_V6 || dir;
   try {
     const kernel = koffi.load("kernel32.dll");
-    const setDir = kernel.func("int __stdcall SetDllDirectoryW(const char16_t *lpPathName)");
+    const setDir = kernel.func("int __stdcall SetDllDirectoryW(str16)");
     setDir(dir);
+    const loadEx = kernel.func("void *__stdcall LoadLibraryExW(str16, void *, uint32)");
+    loadEx(dll, null, 0x00000008);
   } catch {
     /* still try koffi.load */
   }
@@ -92,6 +96,8 @@ function loadApi(): NdiApi | null {
   const dll = resolveNdiLibrary();
   if (!dll) {
     api = null;
+    lastLoadError =
+      "WatchJhon cannot find Processing.NDI.Lib.x64.dll. DistroAV already loaded NDI 6.3 — click DistroAV Get NDI Library, then fully quit and reopen WatchJhon so it sees NDI_RUNTIME_DIR_V6.";
     return null;
   }
   try {
@@ -128,7 +134,23 @@ function loadApi(): NdiApi | null {
       p_metadata: "void *",
       timestamp: "int64",
     });
-    const initialize = lib.func("int NDIlib_initialize()");
+    // DistroAV binds NDIlib_v6_load(), not necessarily NDIlib_initialize as a named export.
+    const v6_load = tryFunc(lib, "void *NDIlib_v6_load()") as (() => unknown) | null;
+    const v5_load = tryFunc(lib, "void *NDIlib_v5_load()") as (() => unknown) | null;
+    if (v6_load) {
+      try {
+        v6_load();
+      } catch {
+        /* named exports below still work on official Runtime DLLs */
+      }
+    } else if (v5_load) {
+      try {
+        v5_load();
+      } catch {
+        /* ignore */
+      }
+    }
+    const initialize = tryFunc(lib, "int NDIlib_initialize()") as (() => number) | null;
     const find_create = lib.func("void *NDIlib_find_create_v2(void *p_create_settings)");
     const find_wait = lib.func("int NDIlib_find_wait_for_sources(void *p_instance, uint32_t timeout_in_ms)");
     const find_sources = lib.func("void *NDIlib_find_get_current_sources(void *p_instance, _Out_ uint32_t *p_no_sources)");
@@ -143,7 +165,13 @@ function loadApi(): NdiApi | null {
         "int NDIlib_recv_capture_v2(void *p_instance, NDIlib_video_frame_v2_t *p_video_data, void *p_audio_data, void *p_metadata, uint32_t timeout_in_ms)",
       )) as NdiApi["recv_capture"];
     const recv_free_video = lib.func("void NDIlib_recv_free_video_v2(void *p_instance, NDIlib_video_frame_v2_t *p_video_data)");
-    if (!initialize()) {
+    if (initialize && !initialize()) {
+      lastLoadError = `NDI DLL is at ${dll} but NDIlib_initialize failed. Companion DLLs in that folder may be missing.`;
+      api = null;
+      return null;
+    }
+    if (!initialize && !v6_load && !v5_load) {
+      lastLoadError = `NDI DLL is at ${dll} but it has no NDIlib_initialize / NDIlib_v6_load export. DistroAV uses NDIlib_v6_load — this is a different NDI DLL (Resolume NDI 5?).`;
       api = null;
       return null;
     }
@@ -169,7 +197,8 @@ function loadApi(): NdiApi | null {
     return loadedApi;
   } catch (error) {
     api = null;
-    onLog?.(`NDI Runtime failed to load: ${error instanceof Error ? error.message : String(error)}`, "error");
+    lastLoadError = `NDI DLL is at ${dll} but koffi could not load it: ${error instanceof Error ? error.message : String(error)}`;
+    onLog?.(lastLoadError, "error");
     return null;
   }
 }
@@ -316,13 +345,20 @@ export function disconnectNdiRecv(assetId?: string) {
 }
 
 const MISSING_RUNTIME =
-  "Chromium cannot decode NDI. Install the free NDI Runtime — not NDI Tools or Webcam Input. Resolume/OBS already include it. " +
+  "WatchJhon cannot load DistroAV's NDI 6.3 DLL. DistroAV already has it — you do not need NDI Tools. Fully quit WatchJhon and reopen it after DistroAV Get NDI Library. " +
   NDI_RUNTIME_URL;
 
 export function connectNdiRecv(assetId: string, sourceName: string) {
+  if (isNoiseNdiName(sourceName)) {
+    return {
+      ok: false as const,
+      error:
+        "That KeepAliveServer row is DistroAV keepalive, not QUBITNDI. Scan again and Connect to HPVS-BPXL-12 (QUBITNDI).",
+    };
+  }
   const loaded = loadApi();
   if (!loaded) {
-    return { ok: false as const, error: MISSING_RUNTIME };
+    return { ok: false as const, error: lastLoadError || MISSING_RUNTIME };
   }
   disconnectNdiRecv();
   const sources = listSdkNdiSources(250);
@@ -377,5 +413,6 @@ export function ndiStatus() {
     runtime: !!loadApi(),
     runtimePath: resolveNdiLibrary(),
     connected: connectedName,
+    loadError: lastLoadError || undefined,
   };
 }

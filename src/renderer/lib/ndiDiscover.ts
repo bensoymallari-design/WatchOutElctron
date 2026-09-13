@@ -2,7 +2,7 @@ import dgram from "node:dgram";
 import { spawn } from "node:child_process";
 import { existsSync } from "node:fs";
 import os from "node:os";
-import { collapseSources, tidyNdiName, type NdiAdvert } from "./ndiNames";
+import { collapseSources, isNoiseNdiName, tidyNdiName, type NdiAdvert } from "./ndiNames";
 
 export type { NdiAdvert };
 export { collapseSources, tidyNdiName } from "./ndiNames";
@@ -122,6 +122,7 @@ function isServiceMeta(name: string) {
   if (!n) return true;
   if (n === "_ndi._tcp" || n === "_ndi._udp") return true;
   if (n.startsWith("_ndi.")) return true;
+  if (isNoiseNdiName(name)) return true;
   return false;
 }
 

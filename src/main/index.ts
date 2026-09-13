@@ -170,6 +170,7 @@ function bindIpc() {
         ok: true,
         runtime: status.runtime,
         runtimePath: status.runtimePath,
+        loadError: status.loadError,
       };
     } catch (error) {
       return {
@@ -179,6 +180,7 @@ function bindIpc() {
         error: error instanceof Error ? error.message : "NDI scan failed",
         runtime: status.runtime,
         runtimePath: status.runtimePath,
+        loadError: status.loadError,
       };
     }
   });

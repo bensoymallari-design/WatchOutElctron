@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { collapseSources, friendlyNdiName, mergeNdiLists, tidyNdiName } from "./ndiNames";
+import { collapseSources, friendlyNdiName, isNoiseNdiName, mergeNdiLists, tidyNdiName } from "./ndiNames";
 
 test("tidy NDI names drop duplicate parenthetical fragments", () => {
   assert.equal(tidyNdiName("LOCALHOST (Qubit Jhon NDI)(ubit Jhon NDI)"), "LOCALHOST (Qubit Jhon NDI)");
@@ -45,4 +45,19 @@ test("mDNS and NDI Runtime lists collapse to one picker row", () => {
   assert.equal(out.length, 1);
   assert.equal(out[0].name, "STUDIO (OBS)");
   assert.equal(out[0].ip, "10.0.0.5:5961");
+});
+
+test("DistroAV KeepAliveServer rows are noise and never listed", () => {
+  assert.equal(isNoiseNdiName("KeepAliveServer (191)"), true);
+  assert.equal(isNoiseNdiName("KeepAliveServer (202)"), true);
+  assert.equal(isNoiseNdiName("191"), true);
+  assert.equal(isNoiseNdiName("HPVS-BPXL-12 (QUBITNDI)"), false);
+  const out = collapseSources([
+    { name: "KeepAliveServer (191)", host: "", port: 0 },
+    { name: "KeepAliveServer (192)", host: "", port: 0 },
+    { name: "HPVS-BPXL-12 (QUBITNDI)", host: "HPVS-BPXL-12", port: 5961 },
+  ]);
+  assert.equal(out.length, 1);
+  assert.equal(out[0].name, "HPVS-BPXL-12 (QUBITNDI)");
+  assert.equal(friendlyNdiName(out[0].name), "QUBITNDI");
 });

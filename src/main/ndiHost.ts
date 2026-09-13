@@ -1,6 +1,7 @@
 import { existsSync } from "node:fs";
-import { join } from "node:path";
+import { dirname, join } from "node:path";
 import { nativeImage, utilityProcess, webContents, type UtilityProcess } from "electron";
+import { asarUnpackedPath } from "./ffmpegBins";
 import { NDI_RUNTIME_URL, resolveNdiLibrary } from "./ndiLibrary";
 import { asNodeBuffer, clonePixels, swapRedBlue } from "./ndiPixels";
 import type { NdiAdvert } from "../renderer/lib/ndiNames";
@@ -15,15 +16,32 @@ let nextId = 1;
 const pending = new Map<number, Pending>();
 let runtime = false;
 let runtimePath: string | null = resolveNdiLibrary();
+let loadError: string | undefined;
 let connected: string | null = null;
 let starting: Promise<void> | null = null;
 
 function workerFile() {
   const js = join(__dirname, "ndiWorker.js");
   const mjs = join(__dirname, "ndiWorker.mjs");
-  if (existsSync(mjs)) return mjs;
-  if (existsSync(js)) return js;
+  for (const cand of [asarUnpackedPath(mjs), mjs, asarUnpackedPath(js), js]) {
+    if (existsSync(cand)) return cand;
+  }
   return null;
+}
+
+function helperEnv(): NodeJS.ProcessEnv {
+  const env: NodeJS.ProcessEnv = { ...process.env };
+  const dll = resolveNdiLibrary();
+  if (dll) {
+    const dir = dirname(dll);
+    env.NDI_RUNTIME_DIR_V6 = env.NDI_RUNTIME_DIR_V6 || dir;
+    env.PATH = `${dir}${process.platform === "win32" ? ";" : ":"}${env.PATH || ""}`;
+  }
+  const unpacked = join(process.resourcesPath || "", "app.asar.unpacked", "node_modules");
+  const fromWorker = asarUnpackedPath(join(__dirname, "..", "..", "node_modules"));
+  const parts = [unpacked, fromWorker, env.NODE_PATH].filter(Boolean);
+  env.NODE_PATH = parts.join(process.platform === "win32" ? ";" : ":");
+  return env;
 }
 
 function jpegBase64(width: number, height: number, bgra: Buffer) {
@@ -57,6 +75,7 @@ function onWorkerMessage(msg: Record<string, unknown>) {
   if (msg.op === "ready" || msg.op === "status") {
     runtime = !!msg.runtime;
     runtimePath = (msg.runtimePath as string | null) ?? runtimePath;
+    loadError = typeof msg.loadError === "string" && msg.loadError ? String(msg.loadError) : undefined;
     if ("connected" in msg) connected = (msg.connected as string | null) ?? connected;
   }
   if (msg.op === "log") {
@@ -106,6 +125,7 @@ function onWorkerMessage(msg: Record<string, unknown>) {
 function workerGone(message: string) {
   child = null;
   connected = null;
+  runtime = false;
   for (const job of pending.values()) job.reject(new Error(message));
   pending.clear();
   for (const wc of webContents.getAllWebContents()) {
@@ -125,7 +145,11 @@ function ensureWorker() {
       return;
     }
     try {
-      child = utilityProcess.fork(file, [], { serviceName: "WatchJhon NDI", stdio: "pipe" });
+      child = utilityProcess.fork(file, [], {
+        serviceName: "WatchJhon NDI",
+        stdio: "pipe",
+        env: helperEnv(),
+      });
     } catch (error) {
       starting = null;
       reject(error instanceof Error ? error : new Error("NDI helper failed to start"));
@@ -217,10 +241,17 @@ export function disconnectNdiRecv(assetId?: string) {
 }
 
 export function ndiStatus() {
+  const dll = runtimePath ?? resolveNdiLibrary();
   return {
-    runtime: runtime || !!resolveNdiLibrary(),
-    runtimePath: runtimePath ?? resolveNdiLibrary(),
+    runtime,
+    runtimePath: dll,
     connected,
+    loadError: runtime
+      ? undefined
+      : loadError ||
+        (dll
+          ? `NDI Runtime is at ${dll} but the WatchJhon helper has not loaded it yet. Fully quit WatchJhon and reopen it.`
+          : "WatchJhon cannot find Processing.NDI.Lib.x64.dll. DistroAV already loaded NDI 6.3 — click DistroAV Get NDI Library, then fully quit WatchJhon so it can read NDI_RUNTIME_DIR_V6."),
   };
 }
 
