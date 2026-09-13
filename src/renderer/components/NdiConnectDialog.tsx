@@ -59,8 +59,8 @@ export function NdiConnectDialog() {
         <span className="text-stone-200">HPVS-BPXL-12 (QUBITNDI)</span>, not KeepAliveServer. Keep{" "}
         <span className="text-stone-200">DistroAV → Main Output</span> on and put a{" "}
         <span className="text-stone-200">camera or Color Source</span> on Program. Display Capture of
-        WatchJhon is a loop. Output keeps the sender’s resolution (Resolume 1920×1080 stays
-        1920×1080 on the wall).
+        WatchJhon is a loop. Stage is a 960 preview so Producer stays smooth; Output keeps the
+        sender’s resolution.
       </p>
 
       <div
@@ -90,7 +90,7 @@ export function NdiConnectDialog() {
               <>
                 {" "}
                 WatchJhon’s helper has not loaded it yet. Splash must say{" "}
-                <span className="text-stone-100">PRODUCER 7.8.28</span>. Fully quit WatchJhon and reopen this
+                <span className="text-stone-100">PRODUCER 7.8.29</span>. Fully quit WatchJhon and reopen this
                 installer.
               </>
             )}

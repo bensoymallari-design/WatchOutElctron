@@ -342,7 +342,7 @@ function emitFrame(video: { xres?: unknown; yres?: unknown; FourCC?: unknown; p_
   if (!loggedFirst) {
     loggedFirst = true;
     onLog?.(
-      `NDI picture ${xres}×${yres} ${fourccLabel(fourcc)} — Output ${scaled.width}×${scaled.height} (sender resolution)`,
+      `NDI picture ${xres}×${yres} ${fourccLabel(fourcc)} — Output ${scaled.width}×${scaled.height}, Stage preview 960`,
       "info",
     );
   }
@@ -406,7 +406,7 @@ function pump() {
     if (kind === NDI_FRAME_VIDEO && video) {
       try {
         const now = Date.now();
-        if (now - lastEncode >= 80) {
+        if (now - lastEncode >= 33) {
           lastEncode = now;
           emitFrame(video);
         }

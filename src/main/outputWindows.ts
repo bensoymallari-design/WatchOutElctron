@@ -45,6 +45,14 @@ function outputShouldPlayAudio(target: OutputScreen, screens: OutputScreen[]) {
   return true;
 }
 
+export function liveOutputWebContentsIds() {
+  const ids = new Set<number>();
+  for (const win of outputs.values()) {
+    if (!win.isDestroyed()) ids.add(win.webContents.id);
+  }
+  return ids;
+}
+
 export function liveOutputIds() {
   for (const [id, win] of outputs) {
     if (win.isDestroyed()) outputs.delete(id);
