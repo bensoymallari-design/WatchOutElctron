@@ -1,8 +1,35 @@
 import type { Cue, Easing } from "../types/show";
 import { ease } from "./easing";
 
-export function cueEnd(cue: Cue) {
+export function cueEnd(cue: Pick<Cue, "start" | "duration">) {
   return cue.start + Math.max(0, cue.duration);
+}
+
+const LIVE_KINDS = new Set(["ndi", "capture"]);
+
+/** End of the latest enabled file/image cue. Live NDI/capture rows are skipped. */
+export function lastPlaybackEnd(
+  cues: Array<Pick<Cue, "enabled" | "type" | "start" | "duration" | "assetId">>,
+  assets: Array<{ id: string; kind: string }> = [],
+) {
+  const live = new Set(assets.filter((a) => LIVE_KINDS.has(a.kind)).map((a) => a.id));
+  let end = 0;
+  for (const cue of cues) {
+    if (!cue.enabled || cue.type !== "media") continue;
+    if (cue.assetId && live.has(cue.assetId)) continue;
+    end = Math.max(end, cueEnd(cue));
+  }
+  return end;
+}
+
+/** Timeline length that ends on the last playback clip. Null when there is nothing to fit. */
+export function fittedTimelineDuration(
+  cues: Array<Pick<Cue, "enabled" | "type" | "start" | "duration" | "assetId">>,
+  assets: Array<{ id: string; kind: string }> = [],
+) {
+  const end = lastPlaybackEnd(cues, assets);
+  if (end <= 0) return null;
+  return Math.max(40, Math.round(end));
 }
 
 export function cuesOverlap(a: Cue, b: Cue) {

@@ -13,6 +13,8 @@ import {
   snapTime,
   purgeAssets,
   timelineClickSeeksPlayhead,
+  lastPlaybackEnd,
+  fittedTimelineDuration,
 } from "./timeline";
 
 function cue(partial: Partial<Cue> & Pick<Cue, "id" | "start" | "duration" | "layerId">): Cue {
@@ -132,4 +134,22 @@ test("clicking a cue never seeks the playhead; empty lane follows Click Jumps to
   assert.equal(timelineClickSeeksPlayhead("lane", true), true);
   assert.equal(timelineClickSeeksPlayhead("lane", false), false);
   assert.equal(timelineClickSeeksPlayhead("ruler", false), true);
+});
+
+test("fit timeline length uses the last enabled media cue, not live capture", () => {
+  const clips = [
+    cue({ id: "short", layerId: "l1", start: 0, duration: 8000 }),
+    cue({ id: "long", layerId: "l2", start: 2000, duration: 30000 }),
+    cue({ id: "off", layerId: "l3", start: 0, duration: 90000, enabled: false }),
+    cue({ id: "mark", layerId: "l1", start: 40000, duration: 0, type: "marker" }),
+    cue({ id: "live", layerId: "l4", start: 0, duration: 120000, assetId: "cap" }),
+  ];
+  const assets = [
+    { id: "cap", kind: "capture" },
+    { id: "vid", kind: "video" },
+  ];
+  assert.equal(lastPlaybackEnd(clips, assets), 32000);
+  assert.equal(fittedTimelineDuration(clips, assets), 32000);
+  assert.equal(fittedTimelineDuration([], []), null);
+  assert.equal(fittedTimelineDuration([cue({ id: "live-only", layerId: "l", start: 0, duration: 60000, assetId: "cap" })], assets), null);
 });

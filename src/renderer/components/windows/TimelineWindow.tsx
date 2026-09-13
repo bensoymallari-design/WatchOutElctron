@@ -295,6 +295,13 @@ export function TimelineWindow() {
           <input type="checkbox" checked={tl.loop} onChange={(e) => useApp.getState().updateTimeline(tl.id, { loop: e.target.checked })} />
           Loop
         </label>
+        <button
+          className="rounded bg-[#f5a623] px-2 py-0.5 text-[11px] font-medium text-black hover:bg-[#ffb347]"
+          title="Set timeline length to the last video/image clip so Loop has no empty tail"
+          onClick={() => useApp.getState().fitTimelineToMedia(tl.id)}
+        >
+          Fit to media
+        </button>
         <span className="ml-3 text-[10px] text-stone-600">Click a clip to edit Properties (playhead stays). Drag the ruler to scrub. Mute in Properties when two clips overlap.</span>
         <div className="ml-auto flex items-center gap-1">
           <button onClick={() => useApp.getState().setTimelineView(zoom / 1.25, scroll)}><ZoomOut size={13} /></button>

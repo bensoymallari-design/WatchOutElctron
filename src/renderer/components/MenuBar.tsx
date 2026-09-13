@@ -37,7 +37,7 @@ export function MenuBar() {
   return (
     <div className="relative z-[1000] flex h-8 shrink-0 items-center overflow-visible border-b border-black bg-[#2a2a2a] px-1 text-[12px]" data-wo-menu>
       <div className="mr-3 px-2 text-[11px] font-black tracking-[0.28em] text-[#f5a623]">
-        WATCHOUT <span className="ml-1 font-semibold tracking-normal text-stone-200">7.8.13</span>
+        WATCHOUT <span className="ml-1 font-semibold tracking-normal text-stone-200">7.8.14</span>
       </div>
       {MENUS.map((name) => (
         <MenuSlot
@@ -288,6 +288,14 @@ function TimelineMenu() {
       <Item label="Add Output Cue" onClick={() => { a().addCueType("output"); a().setMenu(null); }} />
       <Item label="Add Variable Cue" onClick={() => { a().addCueType("variable"); a().setMenu(null); }} />
       <Item label="Add ArtNet Cue" onClick={() => { a().addCueType("artnet"); a().setMenu(null); }} />
+      <Sep />
+      <Item
+        label="Fit Length to Media"
+        onClick={() => {
+          a().fitTimelineToMedia();
+          a().setMenu(null);
+        }}
+      />
       <Sep />
       <Item label="Add Layer" shortcut="Ctrl+I" onClick={() => { a().addLayer(); a().setMenu(null); }} />
       <Item label="Insert Layer" onClick={() => { a().insertLayer(); a().setMenu(null); }} />
