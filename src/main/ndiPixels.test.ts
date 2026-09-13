@@ -9,6 +9,7 @@ import {
   FOURCC_UYVY,
   fourccLabel,
   isBgraFourCC,
+  NDI_OUTPUT_MAX_WIDTH,
   swapRedBlue,
   uyvyToBgra,
   videoToBgra,
@@ -74,4 +75,22 @@ test("downscaleBgra shrinks 1920-wide frames for the Producer", () => {
   assert.equal(out.width, 960);
   assert.equal(out.height, 540);
   assert.equal(out.bgra.length, 960 * 540 * 4);
+});
+
+test("1080p and 4K NDI stay native for Output; only wider-than-wall senders shrink", () => {
+  const hd = Buffer.alloc(1920 * 1080 * 4, 80);
+  const hdOut = downscaleBgra(hd, 1920, 1080, NDI_OUTPUT_MAX_WIDTH);
+  assert.equal(hdOut.width, 1920);
+  assert.equal(hdOut.height, 1080);
+  assert.equal(hdOut.bgra, hd);
+
+  const fourK = Buffer.alloc(3840 * 2160 * 4, 80);
+  const fourKOut = downscaleBgra(fourK, 3840, 2160, NDI_OUTPUT_MAX_WIDTH);
+  assert.equal(fourKOut.width, 3840);
+  assert.equal(fourKOut.height, 2160);
+
+  const wall = Buffer.alloc(5760 * 1080 * 4, 80);
+  const wallOut = downscaleBgra(wall, 5760, 1080, NDI_OUTPUT_MAX_WIDTH);
+  assert.equal(wallOut.width, 5760);
+  assert.equal(wallOut.height, 1080);
 });

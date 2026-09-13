@@ -97,6 +97,9 @@ export function videoToBgra(
   return copyBgraRows(src, width, height, srcStride || width * 4);
 }
 
+/** Keep Resolume/DistroAV rasters up to a 4-wide 1080p wall. Wider senders shrink. */
+export const NDI_OUTPUT_MAX_WIDTH = 7680;
+
 export function downscaleBgra(src: Buffer, width: number, height: number, maxW: number) {
   const scale = width > maxW ? maxW / width : 1;
   const w = Math.max(2, Math.round(width * scale) & ~1);

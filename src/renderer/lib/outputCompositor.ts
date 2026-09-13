@@ -1,6 +1,7 @@
 import type { Asset, Show } from "@/types/show";
 import { collectStageCues } from "@/lib/stageCues";
 import { getLiveKind, getLiveVideo, isLiveReady } from "@/lib/liveSources";
+import { liveRasterSize } from "@/lib/liveReady";
 import { drawProcedural } from "@/lib/procedural";
 import { applyAudioSink } from "@/lib/audioSink";
 import { videoPreload } from "../../shared/mediaPolicy";
@@ -149,11 +150,16 @@ export function syncOutputFrame(host: HTMLElement, show: Show, displayId: string
     } else if (media instanceof HTMLCanvasElement && asset) {
       const ctx = media.getContext("2d");
       if (ctx) {
-        if (media.width !== 1280) {
-          media.width = 1280;
-          media.height = 720;
-        }
         const live = getLiveVideo(asset.id);
+        const raster = liveRasterSize(
+          live && typeof live === "object" ? (live as { width?: number; height?: number; videoWidth?: number; videoHeight?: number }) : null,
+          asset.width || 1920,
+          asset.height || 1080,
+        );
+        if (media.width !== raster.width || media.height !== raster.height) {
+          media.width = raster.width;
+          media.height = raster.height;
+        }
         if (live && isLiveReady(asset.id)) ctx.drawImage(live, 0, 0, media.width, media.height);
         else {
           const waiting = !!getLiveKind(asset.id) && !isLiveReady(asset.id);
