@@ -1,9 +1,10 @@
 import { existsSync } from "node:fs";
 import { join } from "node:path";
-import { utilityProcess, webContents, type UtilityProcess } from "electron";
+import { utilityProcess, webContents, type UtilityProcess, type WebContents } from "electron";
 import { asarUnpackedPath, preferPackedPath } from "./ffmpegBins";
 import { NDI_RUNTIME_URL, isBenignHelperStderr, pinNdiRuntimeOnEnv, resolveNdiLibrary } from "./ndiLibrary";
-import { asNodeBuffer, clonePixels, swapRedBlue } from "./ndiPixels";
+import { asNodeBuffer, clonePixels, downscaleBgra, NDI_PREVIEW_MAX_WIDTH, swapRedBlue } from "./ndiPixels";
+import { liveOutputWebContentsIds } from "./outputWindows";
 import type { NdiAdvert } from "../renderer/lib/ndiNames";
 
 interface Pending {
@@ -32,17 +33,34 @@ function prepareInheritedEnv() {
   pinNdiRuntimeOnEnv(process.env, runtimePath);
 }
 
-function broadcastFrame(payload: {
+function sendFrame(
+  wc: WebContents,
+  payload: {
+    assetId: string;
+    rgba: Uint8Array;
+    jpegBase64: string;
+    width: number;
+    height: number;
+    sourceName: string;
+  },
+) {
+  if (wc.isDestroyed()) return;
+  wc.send("ndi:frame", payload);
+}
+
+function broadcastFrame(full: {
   assetId: string;
   rgba: Uint8Array;
   jpegBase64: string;
   width: number;
   height: number;
   sourceName: string;
-}) {
+}, preview: { rgba: Uint8Array; width: number; height: number }) {
+  const outputIds = liveOutputWebContentsIds();
   for (const wc of webContents.getAllWebContents()) {
     if (wc.isDestroyed()) continue;
-    wc.send("ndi:frame", payload);
+    if (outputIds.has(wc.id)) sendFrame(wc, full);
+    else sendFrame(wc, { ...full, rgba: preview.rgba, width: preview.width, height: preview.height });
   }
 }
 
@@ -81,15 +99,24 @@ function onWorkerMessage(msg: Record<string, unknown>) {
       }
       return;
     }
-    broadcastFrame({
-      assetId: String(msg.assetId),
-      rgba: clonePixels(swapRedBlue(bgra)),
-      // Skip JPEG at 1080p/4K — RGBA is what Stage and Output paint. JPEG was a contextBridge fallback.
-      jpegBase64: "",
-      width,
-      height,
-      sourceName: String(msg.sourceName || ""),
-    });
+    const preview = downscaleBgra(bgra, width, height, NDI_PREVIEW_MAX_WIDTH);
+    const previewRgba = clonePixels(swapRedBlue(preview.bgra));
+    const outputIds = liveOutputWebContentsIds();
+    const fullRgba =
+      outputIds.size && (preview.width !== width || preview.height !== height)
+        ? clonePixels(swapRedBlue(bgra))
+        : previewRgba;
+    broadcastFrame(
+      {
+        assetId: String(msg.assetId),
+        rgba: fullRgba,
+        jpegBase64: "",
+        width: outputIds.size ? width : preview.width,
+        height: outputIds.size ? height : preview.height,
+        sourceName: String(msg.sourceName || ""),
+      },
+      { rgba: previewRgba, width: preview.width, height: preview.height },
+    );
     return;
   }
   const id = Number(msg.id);

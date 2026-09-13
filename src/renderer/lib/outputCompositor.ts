@@ -1,6 +1,6 @@
 import type { Asset, Show } from "@/types/show";
 import { collectStageCues } from "@/lib/stageCues";
-import { getLiveKind, getLiveVideo, isLiveReady } from "@/lib/liveSources";
+import { getLiveKind, getLiveVideo, isLiveReady, liveFrameGen } from "@/lib/liveSources";
 import { liveRasterSize } from "@/lib/liveReady";
 import { drawProcedural } from "@/lib/procedural";
 import { applyAudioSink } from "@/lib/audioSink";
@@ -9,6 +9,7 @@ import { videoPreload } from "../../shared/mediaPolicy";
 interface LayerEls {
   wrap: HTMLDivElement;
   media: HTMLVideoElement | HTMLImageElement | HTMLCanvasElement;
+  lastGen?: number;
 }
 
 const layers = new Map<string, LayerEls>();
@@ -159,9 +160,15 @@ export function syncOutputFrame(host: HTMLElement, show: Show, displayId: string
         if (media.width !== raster.width || media.height !== raster.height) {
           media.width = raster.width;
           media.height = raster.height;
+          layer.lastGen = -1;
         }
-        if (live && isLiveReady(asset.id)) ctx.drawImage(live, 0, 0, media.width, media.height);
-        else {
+        if (live && isLiveReady(asset.id)) {
+          const gen = liveFrameGen(asset.id);
+          if (layer.lastGen !== gen) {
+            ctx.drawImage(live, 0, 0, media.width, media.height);
+            layer.lastGen = gen;
+          }
+        } else {
           const waiting = !!getLiveKind(asset.id) && !isLiveReady(asset.id);
           const kind = asset.url.startsWith("procedural:") ? asset.url.slice("procedural:".length) : waiting ? "ndi-wait" : "ndi";
           drawProcedural(ctx, kind, media.width, media.height, now);

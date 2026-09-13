@@ -10,6 +10,7 @@ import {
   fourccLabel,
   isBgraFourCC,
   NDI_OUTPUT_MAX_WIDTH,
+  NDI_PREVIEW_MAX_WIDTH,
   swapRedBlue,
   uyvyToBgra,
   videoToBgra,
@@ -75,6 +76,14 @@ test("downscaleBgra shrinks 1920-wide frames for the Producer", () => {
   assert.equal(out.width, 960);
   assert.equal(out.height, 540);
   assert.equal(out.bgra.length, 960 * 540 * 4);
+});
+
+test("Producer NDI preview is 960-wide so Stage stays light", () => {
+  const src = Buffer.alloc(1920 * 1080 * 4, 80);
+  const out = downscaleBgra(src, 1920, 1080, NDI_PREVIEW_MAX_WIDTH);
+  assert.equal(out.width, 960);
+  assert.equal(out.height, 540);
+  assert.equal(NDI_PREVIEW_MAX_WIDTH, 960);
 });
 
 test("1080p and 4K NDI stay native for Output; only wider-than-wall senders shrink", () => {

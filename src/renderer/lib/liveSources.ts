@@ -20,6 +20,8 @@ interface LiveEntry {
   stream?: MediaStream;
   kind: LiveKind;
   ready: boolean;
+  gen?: number;
+  imageData?: ImageData;
 }
 
 const lives = new Map<string, LiveEntry>();
@@ -61,6 +63,10 @@ export function isLiveReady(assetId: string) {
   if (!entry) return false;
   if (entry.canvas) return !!entry.ready;
   return isPaintReady(entry.video);
+}
+
+export function liveFrameGen(assetId: string) {
+  return lives.get(assetId)?.gen ?? 0;
 }
 
 function makeVideo() {
@@ -170,12 +176,17 @@ export function applyNdiFrame(payload: NdiFramePayload) {
     }
     const ctx = canvas.getContext("2d");
     if (!ctx) return;
-    const clamped = new Uint8ClampedArray(w * h * 4);
-    clamped.set(rgba.subarray(0, clamped.length));
-    ctx.putImageData(new ImageData(clamped, w, h), 0, 0);
     const current = lives.get(payload.assetId);
-    if (current) current.ready = true;
-    emit();
+    if (!current) return;
+    if (!current.imageData || current.imageData.width !== w || current.imageData.height !== h) {
+      current.imageData = ctx.createImageData(w, h);
+    }
+    current.imageData.data.set(rgba.subarray(0, current.imageData.data.length));
+    ctx.putImageData(current.imageData, 0, 0);
+    const wasReady = current.ready;
+    current.ready = true;
+    current.gen = (current.gen ?? 0) + 1;
+    if (!wasReady) emit();
     if (!loggedPaint) {
       loggedPaint = true;
       window.__woLog?.(`NDI Stage painted ${w}×${h}`, "info");
@@ -187,7 +198,7 @@ export function applyNdiFrame(payload: NdiFramePayload) {
     if (!loggedDrop) {
       loggedDrop = true;
       window.__woLog?.(
-        "NDI frame reached Producer but pixels were empty. Rebuild 7.8.28. DistroAV Main Output is on — switch OBS to a camera, not Display Capture of WatchJhon.",
+        "NDI frame reached Producer but pixels were empty. Rebuild 7.8.29. DistroAV Main Output is on — switch OBS to a camera, not Display Capture of WatchJhon.",
         "warn",
       );
     }
@@ -208,8 +219,10 @@ export function applyNdiFrame(payload: NdiFramePayload) {
       const ctx = current.canvas.getContext("2d");
       ctx?.drawImage(bmp, 0, 0);
       bmp.close();
+      const wasReady = current.ready;
       current.ready = true;
-      emit();
+      current.gen = (current.gen ?? 0) + 1;
+      if (!wasReady) emit();
       if (!loggedPaint) {
         loggedPaint = true;
         window.__woLog?.(`NDI Stage painted ${bmp.width}×${bmp.height} (JPEG)`, "info");

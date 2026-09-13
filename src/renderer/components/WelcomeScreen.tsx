@@ -21,7 +21,7 @@ export function WelcomeScreen() {
         <div className="relative">
           <div className="mb-3 text-[11px] tracking-[0.45em] text-[#f5a623]">MULTI-DISPLAY SHOW CONTROL</div>
           <h1 className="text-[64px] font-black leading-none tracking-[0.18em] text-[#f5a623]">WatchJhon</h1>
-          <div className="mt-2 text-2xl font-semibold tracking-[0.28em] text-[#f5a623]">PRODUCER  7.8.28</div>
+          <div className="mt-2 text-2xl font-semibold tracking-[0.28em] text-[#f5a623]">PRODUCER  7.8.29</div>
           <p className="mt-6 max-w-xl text-[13px] leading-relaxed text-stone-400">
             Native desktop Producer: Stage, Timeline, Assets, and Runner outputs on real monitors.
             Devices → Assign screens maps each Display to one of your controllers. Devices → Audio → Test beep
