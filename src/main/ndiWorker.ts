@@ -3,6 +3,7 @@ import {
   connectNdiRecv,
   disconnectNdiRecv,
   listSdkNdiSources,
+  ndiRuntimePath,
   ndiStatus,
   setNdiFrameHandler,
   setNdiLogHandler,
@@ -57,4 +58,9 @@ port?.on("message", (event) => {
   }
 });
 
-send({ op: "ready", ...ndiStatus() });
+send({
+  op: "ready",
+  runtime: false,
+  runtimePath: ndiRuntimePath(),
+  connected: null,
+});

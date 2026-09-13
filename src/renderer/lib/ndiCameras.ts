@@ -57,4 +57,4 @@ export function preferredCameraId(cameras: VideoInput[], sourceNames: string[]) 
 }
 
 export const NDI_TOOLS_URL = "https://ndi.video/tools/";
-export const NDI_RUNTIME_URL = "https://ndi.video/tools/ndi-runtime/";
+export const NDI_RUNTIME_URL = "https://ndi.link/NDIRedistV6";

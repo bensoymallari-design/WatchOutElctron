@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { expandWinEnv, ndiLibraryCandidates, parseRegEnvValue, resolveNdiLibrary } from "./ndiLibrary";
+import { expandWinEnv, ndiLibraryCandidates, parseRegEnvValue, pinNdiRuntimeOnEnv, resolveNdiLibrary, sanitizeUtilityProcessEnv } from "./ndiLibrary";
 
 test("Windows NDI Runtime and Resolume folders are searched for the SDK dll", () => {
   const paths = ndiLibraryCandidates("win32", {
@@ -81,4 +81,26 @@ test("registry extraDirs are preferred over Resolume NDI 5", () => {
 test("DistroAV plugin_config folder is searched", () => {
   const paths = ndiLibraryCandidates("win32", { ProgramFiles: "C:\\Program Files", ProgramData: "C:\\ProgramData" });
   assert.ok(paths.some((p) => p.includes("plugin_config") && p.includes("DistroAV")));
+});
+
+test("Windows utilityProcess env strips cmd.exe =C: keys that crash Electron", () => {
+  const clean = sanitizeUtilityProcessEnv({
+    PATH: "C:\\Windows",
+    "=C:": "C:\\",
+    "=ExitCode": "00000000",
+    NDI_RUNTIME_DIR_V6: "C:\\Program Files\\NDI\\NDI 6 Runtime\\v6",
+    empty: undefined,
+  });
+  assert.equal(clean.PATH, "C:\\Windows");
+  assert.equal(clean.NDI_RUNTIME_DIR_V6, "C:\\Program Files\\NDI\\NDI 6 Runtime\\v6");
+  assert.equal(clean["=C:"], undefined);
+  assert.equal(clean["=ExitCode"], undefined);
+  assert.equal("empty" in clean, false);
+});
+
+test("pinNdiRuntimeOnEnv prefixes PATH with the DistroAV Runtime folder", () => {
+  const env: NodeJS.ProcessEnv = { PATH: "C:\\Windows" };
+  pinNdiRuntimeOnEnv(env, "C:\\Program Files\\NDI\\NDI 6 Runtime\\v6\\Processing.NDI.Lib.x64.dll", "win32");
+  assert.equal(env.NDI_RUNTIME_DIR_V6, "C:\\Program Files\\NDI\\NDI 6 Runtime\\v6");
+  assert.ok(env.PATH?.startsWith("C:\\Program Files\\NDI\\NDI 6 Runtime\\v6;"));
 });

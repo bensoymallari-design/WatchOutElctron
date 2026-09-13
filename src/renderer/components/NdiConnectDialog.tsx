@@ -76,10 +76,27 @@ export function NdiConnectDialog() {
             <span className="text-stone-100">QUBITNDI</span> below. KeepAliveServer rows are DistroAV
             keepalive, not video, and are hidden.
           </>
+        ) : scan?.runtimePath ? (
+          <>
+            DistroAV’s NDI DLL is already at <span className="text-stone-100">{scan.runtimePath}</span>. You do{" "}
+            <span className="text-stone-100">not</span> need NDI Tools or another Runtime download.
+            {scan.loadError ? (
+              <>
+                {" "}
+                <span className="text-amber-50">{scan.loadError}</span>
+              </>
+            ) : (
+              <>
+                {" "}
+                WatchJhon’s helper has not loaded it yet. Splash must say{" "}
+                <span className="text-stone-100">PRODUCER 7.8.24</span>. Fully quit WatchJhon and reopen this
+                installer.
+              </>
+            )}
+          </>
         ) : (
           <>
-            WatchJhon cannot load DistroAV’s NDI 6.3 DLL. DistroAV already has it — you do not need NDI
-            Tools.
+            WatchJhon cannot find DistroAV’s NDI 6.3 DLL.
             {scan?.loadError ? (
               <>
                 {" "}
@@ -89,9 +106,7 @@ export function NdiConnectDialog() {
               <>
                 {" "}
                 Click DistroAV <span className="text-stone-100">Get NDI Library</span>, then fully quit
-                WatchJhon (not just Close) and reopen so it can read{" "}
-                <span className="text-stone-100">NDI_RUNTIME_DIR_V6</span>. Splash must say{" "}
-                <span className="text-stone-100">PRODUCER 7.8.23</span>.
+                WatchJhon so it can read <span className="text-stone-100">NDI_RUNTIME_DIR_V6</span>.
               </>
             )}{" "}
             Only if DistroAV itself cannot load NDI, install the free{" "}

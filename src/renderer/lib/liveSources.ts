@@ -187,7 +187,7 @@ export function applyNdiFrame(payload: NdiFramePayload) {
     if (!loggedDrop) {
       loggedDrop = true;
       window.__woLog?.(
-        "NDI frame reached Producer but pixels were empty. Rebuild 7.8.23. DistroAV Main Output is on — switch OBS to a camera, not Display Capture of WatchJhon.",
+        "NDI frame reached Producer but pixels were empty. Rebuild 7.8.24. DistroAV Main Output is on — switch OBS to a camera, not Display Capture of WatchJhon.",
         "warn",
       );
     }

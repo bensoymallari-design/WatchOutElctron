@@ -2,7 +2,7 @@ import { execFileSync } from "node:child_process";
 import { existsSync } from "node:fs";
 import { posix, win32 } from "node:path";
 
-export const NDI_RUNTIME_URL = "https://ndi.video/tools/ndi-runtime/";
+export const NDI_RUNTIME_URL = "https://ndi.link/NDIRedistV6";
 
 function joinFor(platform: NodeJS.Platform, ...parts: string[]) {
   return (platform === "win32" ? win32 : posix).join(...parts);
@@ -132,4 +132,34 @@ export function resolveNdiLibrary(
 ) {
   const extras = extraDirs ?? (platform === "win32" ? readWindowsNdiDirs() : []);
   return ndiLibraryCandidates(platform, env, extras).find((p) => exists(p)) ?? null;
+}
+
+/** Put DistroAV's Runtime folder on PATH / NDI_RUNTIME_DIR_V6 so the helper inherits it. */
+export function pinNdiRuntimeOnEnv(
+  env: NodeJS.ProcessEnv,
+  dll: string | null,
+  platform: NodeJS.Platform = process.platform,
+) {
+  if (!dll) return env;
+  const dir = (platform === "win32" ? win32 : posix).dirname(dll);
+  env.NDI_RUNTIME_DIR_V6 = env.NDI_RUNTIME_DIR_V6 || dir;
+  const sep = platform === "win32" ? ";" : ":";
+  const path = env.PATH || env.Path || "";
+  if (!path.toLowerCase().includes(dir.toLowerCase())) {
+    env.PATH = `${dir}${sep}${path}`;
+  }
+  return env;
+}
+
+/**
+ * Electron utilityProcess.fork({ env }) rejects Windows cmd.exe keys like `=C:`.
+ * Prefer not passing env at all; if you must, strip those keys first.
+ */
+export function sanitizeUtilityProcessEnv(env: NodeJS.ProcessEnv): Record<string, string> {
+  const out: Record<string, string> = {};
+  for (const [key, value] of Object.entries(env)) {
+    if (!key || key.startsWith("=") || value === undefined) continue;
+    out[key] = String(value);
+  }
+  return out;
 }
