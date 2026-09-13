@@ -12,6 +12,7 @@ import {
   removeTimelines,
   snapTime,
   purgeAssets,
+  timelineClickSeeksPlayhead,
 } from "./timeline";
 
 function cue(partial: Partial<Cue> & Pick<Cue, "id" | "start" | "duration" | "layerId">): Cue {
@@ -123,4 +124,12 @@ test("purging an NDI or video asset also removes its timeline cues", () => {
     next.timelines[0].cues.map((c) => c.assetId),
     ["clip", undefined],
   );
+});
+
+test("clicking a cue never seeks the playhead; empty lane follows Click Jumps to Time", () => {
+  assert.equal(timelineClickSeeksPlayhead("cue", true), false);
+  assert.equal(timelineClickSeeksPlayhead("cue", false), false);
+  assert.equal(timelineClickSeeksPlayhead("lane", true), true);
+  assert.equal(timelineClickSeeksPlayhead("lane", false), false);
+  assert.equal(timelineClickSeeksPlayhead("ruler", false), true);
 });

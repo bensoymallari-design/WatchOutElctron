@@ -131,3 +131,10 @@ export function purgeAssets<T extends { assets: { id: string }[]; timelines: { c
     })),
   };
 }
+
+/** Cue bars only select for Properties. The ruler always seeks; empty lanes follow Edit → Click Jumps to Time. */
+export function timelineClickSeeksPlayhead(target: "cue" | "lane" | "ruler", clickJumpsToTime: boolean) {
+  if (target === "ruler") return true;
+  if (target === "lane") return clickJumpsToTime;
+  return false;
+}

@@ -37,11 +37,13 @@ export function collectAudibleMedia(show: Show): AudibleClip[] {
     const asset = ev.cue.assetId ? assets.get(ev.cue.assetId) : undefined;
     if (!asset?.url) continue;
     if (asset.kind !== "video" && asset.kind !== "audio") continue;
+    const volume = Math.max(0, Math.min(1, ev.volume / 100));
+    if (volume <= 0.001) continue;
     clips.push({
       cueId: ev.cue.id,
       url: asset.url,
       localTimeMs: ev.localTime,
-      volume: Math.max(0, Math.min(1, ev.volume / 100)),
+      volume,
       playing,
       freeRunning: ev.cue.freeRunning,
     });

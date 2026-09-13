@@ -58,3 +58,21 @@ test("cues off the playhead are silent", () => {
   show.timelines[0].cues = [emptyCue({ id: "c-video", layerId, start: 0, duration: 8000, assetId: video.id })];
   assert.equal(collectAudibleMedia(show).length, 0);
 });
+
+test("muted cue is silent while an overlapping clip still plays", () => {
+  const show = emptyShow();
+  const first = emptyAsset({ id: "v1", name: "First", kind: "video", url: "file:///first.webm", duration: 8000 });
+  const second = emptyAsset({ id: "v2", name: "Second", kind: "video", url: "file:///second.webm", duration: 8000 });
+  show.assets = [first, second];
+  const a = show.timelines[0].layers[0].id;
+  const b = show.timelines[0].layers[1].id;
+  show.timelines[0].playback = "play";
+  show.timelines[0].playhead = 500;
+  show.timelines[0].cues = [
+    emptyCue({ id: "c-first", layerId: a, start: 0, duration: 8000, assetId: first.id, volume: 80, muted: true }),
+    emptyCue({ id: "c-second", layerId: b, start: 0, duration: 8000, assetId: second.id, volume: 100 }),
+  ];
+  const clips = collectAudibleMedia(show);
+  assert.equal(clips.find((c) => c.cueId === "c-first"), undefined);
+  assert.equal(clips.find((c) => c.cueId === "c-second")?.volume, 1);
+});

@@ -194,8 +194,13 @@ function CueProps({ cue }: { cue: Cue }) {
       </div>
       <Num label="Rotation Z" value={cue.rotation.z} onChange={(v) => u({ rotation: { ...cue.rotation, z: v } })} />
       <Num label="Opacity" value={cue.opacity} onChange={(v) => u({ opacity: v })} />
-      <Num label="Volume" value={cue.volume} onChange={(v) => u({ volume: v })} />
-      <div className="text-[10px] text-stone-500">0–100 · plays on this PC’s speakers when you press Space</div>
+      <Check label="Mute audio" checked={!!cue.muted} onChange={(v) => u({ muted: v })} />
+      <Num label="Volume" value={cue.volume} onChange={(v) => u({ volume: Math.max(0, Math.min(100, v)) })} />
+      <div className="text-[10px] leading-snug text-stone-500">
+        {cue.muted
+          ? "Muted — picture still plays, soundtrack off. Uncheck to hear this clip again."
+          : "0–100. Two clips overlapping? Mute the one you do not want to hear. Picture stays."}
+      </div>
       {cue.control && (
         <>
           <Read label="Control" value={`${cue.control.state} → ${cue.control.target}`} />
