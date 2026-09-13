@@ -2,7 +2,7 @@ import { existsSync } from "node:fs";
 import { join } from "node:path";
 import { nativeImage, utilityProcess, webContents, type UtilityProcess } from "electron";
 import { asarUnpackedPath, preferPackedPath } from "./ffmpegBins";
-import { NDI_RUNTIME_URL, pinNdiRuntimeOnEnv, resolveNdiLibrary } from "./ndiLibrary";
+import { NDI_RUNTIME_URL, isBenignHelperStderr, pinNdiRuntimeOnEnv, resolveNdiLibrary } from "./ndiLibrary";
 import { asNodeBuffer, clonePixels, swapRedBlue } from "./ndiPixels";
 import type { NdiAdvert } from "../renderer/lib/ndiNames";
 
@@ -174,7 +174,7 @@ function ensureWorker() {
     });
     child.stderr?.on("data", (buf: Buffer) => {
       const message = String(buf).trim();
-      if (!message) return;
+      if (!message || isBenignHelperStderr(message)) return;
       lastHelperError = message;
       for (const wc of webContents.getAllWebContents()) {
         if (wc.isDestroyed()) continue;
