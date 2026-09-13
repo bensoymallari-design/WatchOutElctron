@@ -79,6 +79,14 @@ function pinDllDirectory(koffi: Koffi, dll: string) {
   }
 }
 
+function tryFunc(lib: { func: (sig: string) => unknown }, sig: string) {
+  try {
+    return lib.func(sig);
+  } catch {
+    return null;
+  }
+}
+
 function loadApi(): NdiApi | null {
   if (api !== undefined) return api;
   const dll = resolveNdiLibrary();
@@ -127,15 +135,19 @@ function loadApi(): NdiApi | null {
     const recv_create = lib.func("void *NDIlib_recv_create_v3(NDIlib_recv_create_v3_t *p_create_settings)");
     const recv_connect = lib.func("void NDIlib_recv_connect(void *p_instance, NDIlib_source_t *p_src)");
     const recv_destroy = lib.func("void NDIlib_recv_destroy(void *p_instance)");
-    const recv_capture = lib.func(
-      "int NDIlib_recv_capture_v2(void *p_instance, NDIlib_video_frame_v2_t *p_video_data, void *p_audio_data, void *p_metadata, uint32_t timeout_in_ms)",
-    );
+    const recv_capture = (tryFunc(
+      lib,
+      "int NDIlib_recv_capture_v3(void *p_instance, NDIlib_video_frame_v2_t *p_video_data, void *p_audio_data, void *p_metadata, uint32_t timeout_in_ms)",
+    ) ??
+      lib.func(
+        "int NDIlib_recv_capture_v2(void *p_instance, NDIlib_video_frame_v2_t *p_video_data, void *p_audio_data, void *p_metadata, uint32_t timeout_in_ms)",
+      )) as NdiApi["recv_capture"];
     const recv_free_video = lib.func("void NDIlib_recv_free_video_v2(void *p_instance, NDIlib_video_frame_v2_t *p_video_data)");
     if (!initialize()) {
       api = null;
       return null;
     }
-    api = {
+    const loadedApi: NdiApi = {
       find_create,
       find_wait,
       find_sources,
@@ -150,10 +162,11 @@ function loadApi(): NdiApi | null {
       videoSize: koffi.sizeof(VideoFrame),
       koffi,
     };
-    findInst = find_create(null);
-    videoBuf = Buffer.alloc(Math.max(256, api.videoSize + 64));
+    api = loadedApi;
+    findInst = find_create({ show_local_sources: true, p_groups: null, p_extra_ips: null }) || find_create(null);
+    videoBuf = Buffer.alloc(Math.max(256, loadedApi.videoSize + 64));
     onLog?.(`NDI Runtime loaded · ${dll}`, "info");
-    return api;
+    return loadedApi;
   } catch (error) {
     api = null;
     onLog?.(`NDI Runtime failed to load: ${error instanceof Error ? error.message : String(error)}`, "error");
@@ -346,7 +359,7 @@ export function connectNdiRecv(assetId: string, sourceName: string) {
   pumping = true;
   setTimeout(pump, 0);
   onLog?.(
-    `NDI helper connected to ${name}. Waiting for video — enable OBS Tools → NDI → Main Output. NDI Tools is not required.`,
+    `NDI helper connected to ${name}. DistroAV Main Output can stay on — switch the OBS scene to a camera or Color Source, not Display Capture of WatchJhon.`,
     "info",
   );
   return { ok: true as const, name: connectedName, runtime: true };
