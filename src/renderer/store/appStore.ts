@@ -288,7 +288,7 @@ export const useApp = create<AppState & AppActions>((set, get) => ({
       dialog: null,
       showPath: null,
     });
-    get().log("Opened WATCHOUT demo show — 3-wide LED wall");
+    get().log("Opened WatchJhon demo show — 3-wide LED wall");
     setTimeout(() => get().frameDisplays(), 40);
   },
 

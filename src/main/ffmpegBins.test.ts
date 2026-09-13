@@ -12,9 +12,9 @@ test("Windows lookup prefers env, then a bundled binary, then common install fol
 });
 
 test("installer asar paths rewrite to app.asar.unpacked so ffmpeg.exe can spawn", () => {
-  const packed = "C:\\Program Files\\WATCHOUT Producer\\resources\\app.asar\\node_modules\\ffmpeg-static\\ffmpeg.exe";
+  const packed = "C:\\Program Files\\WatchJhon\\resources\\app.asar\\node_modules\\ffmpeg-static\\ffmpeg.exe";
   assert.match(asarUnpackedPath(packed), /app\.asar\.unpacked/);
-  const bins = packagedResourceBins("ffmpeg-static", "win32", "C:\\Program Files\\WATCHOUT Producer\\resources", "x64");
+  const bins = packagedResourceBins("ffmpeg-static", "win32", "C:\\Program Files\\WatchJhon\\resources", "x64");
   assert.ok(bins.some((p) => p.includes("app.asar.unpacked") && p.endsWith("ffmpeg.exe")));
 });
 

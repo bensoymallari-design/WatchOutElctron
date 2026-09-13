@@ -37,7 +37,7 @@ export function MenuBar() {
   return (
     <div className="relative z-[1000] flex h-8 shrink-0 items-center overflow-visible border-b border-black bg-[#2a2a2a] px-1 text-[12px]" data-wo-menu>
       <div className="mr-3 px-2 text-[11px] font-black tracking-[0.28em] text-[#f5a623]">
-        WATCHOUT <span className="ml-1 font-semibold tracking-normal text-stone-200">7.8.14</span>
+        WatchJhon <span className="ml-1 font-semibold tracking-normal text-stone-200">7.8.15</span>
       </div>
       {MENUS.map((name) => (
         <MenuSlot
@@ -374,13 +374,9 @@ function HelpMenu() {
         }}
       />
       <Item
-        label="Documentation"
-        onClick={() => void window.watchout?.openExternal("https://docs.dataton.com/watchout-7-new/watchout/getting-started/welcome-to-watchout-7.html")}
-      />
-      <Item
-        label="About WATCHOUT"
+        label="About WatchJhon"
         onClick={() => {
-          a().log(`WATCHOUT 7 Producer (desktop)  ·  ${show?.name ?? ""}  ·  ${formatTimecode(0)}`);
+          a().log(`WatchJhon Producer  ·  ${show?.name ?? ""}  ·  ${formatTimecode(0)}`);
           a().setDialog("about");
         }}
       />

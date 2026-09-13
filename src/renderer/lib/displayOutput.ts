@@ -78,7 +78,7 @@ export async function openDisplayOutput(
   screen?: OutputScreen,
   opts?: { name?: string; channel?: number; fullscreen?: boolean },
 ) {
-  if (!api()) throw new Error("Desktop output is only available in the WATCHOUT desktop app");
+  if (!api()) throw new Error("Desktop output is only available in the WatchJhon desktop app");
   await api().openOutput({
     displayId,
     displayName: opts?.name ?? "Display",

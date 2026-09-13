@@ -132,7 +132,7 @@ export function localNode(partial?: Partial<ShowNode>): ShowNode {
     gpuLoad: 22,
     ram: 41,
     disk: 12,
-    version: "7.8.14",
+    version: "7.8.15",
     ...partial,
   };
 }
@@ -180,7 +180,7 @@ export function emptyShow(name = "Untitled Show"): Show {
       { id: uid("aud"), name: "WASAPI Default", nodeId: "local-runner", channels: 2, driver: "WASAPI" },
     ],
     captureDevices: [
-      { id: uid("cap"), name: "NDI Source 1", nodeId: "local-runner", kind: "NDI", signal: "WATCHOUT-PREVIEW" },
+      { id: uid("cap"), name: "NDI Source 1", nodeId: "local-runner", kind: "NDI", signal: "WATCHJHON-PREVIEW" },
     ],
     variables: [
       { id: uid("var"), name: "intensity", value: 1, min: 0, max: 1, protocol: "osc", address: "/watchin/intensity" },
@@ -195,7 +195,7 @@ function svgData(svg: string) {
 }
 
 export function makeDemoShow(): Show {
-  const show = emptyShow("WATCHOUT Demo — LED Wall");
+  const show = emptyShow("WatchJhon Demo — LED Wall");
   show.displays = [
     emptyDisplay({ name: "LED Left", x: 0, y: 0, width: 1920, height: 1080, channel: 1, nodeId: "local-runner" }),
     emptyDisplay({ name: "LED Center", x: 1920, y: 0, width: 1920, height: 1080, channel: 2, nodeId: "local-runner" }),
@@ -225,7 +225,7 @@ export function makeDemoShow(): Show {
       <rect x="1096" width="274" height="1080" fill="#c000c0"/>
       <rect x="1370" width="274" height="1080" fill="#c00000"/>
       <rect x="1644" width="276" height="1080" fill="#0000c0"/>
-      <text x="960" y="560" text-anchor="middle" fill="#fff" font-family="Arial" font-size="72">WATCHOUT 7</text>
+      <text x="960" y="560" text-anchor="middle" fill="#fff" font-family="Arial" font-size="72">WatchJhon</text>
     </svg>`),
   });
   const title = emptyAsset({
@@ -243,7 +243,7 @@ export function makeDemoShow(): Show {
       </defs>
       <rect width="1920" height="1080" fill="url(#g)"/>
       <rect x="80" y="80" width="1760" height="920" fill="none" stroke="#f59e0b" stroke-width="4"/>
-      <text x="960" y="470" text-anchor="middle" fill="#f59e0b" font-family="Arial Black, Arial" font-size="92" letter-spacing="18">WATCHOUT</text>
+      <text x="960" y="470" text-anchor="middle" fill="#f59e0b" font-family="Arial Black, Arial" font-size="92" letter-spacing="18">WatchJhon</text>
       <text x="960" y="560" text-anchor="middle" fill="#e7e5e4" font-family="Arial" font-size="36" letter-spacing="8">MULTI-DISPLAY SHOW COMPOSER</text>
       <text x="960" y="680" text-anchor="middle" fill="#a8a29e" font-family="Arial" font-size="22">Producer  ·  Director  ·  Runner  ·  Asset Manager</text>
     </svg>`),

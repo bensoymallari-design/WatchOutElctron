@@ -88,7 +88,7 @@ export async function openOutput(opts: OpenOutputOptions) {
     width: target.width,
     height: target.height,
     ...OUTPUT_WINDOW_CHROME,
-    title: `WATCHOUT · ${opts.displayName}`,
+    title: `WatchJhon · ${opts.displayName}`,
     show: false,
     webPreferences: {
       preload,

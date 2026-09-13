@@ -1,6 +1,7 @@
 
 import { useApp } from "@/store/appStore";
 import { useRef } from "react";
+import { Dialogs } from "@/components/Dialogs";
 
 export function WelcomeScreen() {
   const newShow = useApp((s) => s.newShow);
@@ -11,16 +12,16 @@ export function WelcomeScreen() {
   const fileRef = useRef<HTMLInputElement>(null);
 
   return (
-    <div className="flex h-screen w-screen overflow-hidden bg-[#0d0d0d]">
+    <div className="relative flex h-screen w-screen overflow-hidden bg-[#0d0d0d]">
       <div className="relative flex w-[58%] flex-col justify-center px-16">
         <div className="absolute inset-0 opacity-40" style={{
           background:
             "radial-gradient(ellipse at 20% 20%, rgba(245,166,35,0.18), transparent 50%), radial-gradient(ellipse at 80% 80%, rgba(168,85,247,0.12), transparent 45%)",
         }} />
         <div className="relative">
-          <div className="mb-3 text-[11px] tracking-[0.45em] text-[#f5a623]">DATATON-STYLE SHOW CONTROL</div>
-          <h1 className="text-[64px] font-black leading-none tracking-[0.18em] text-[#f5a623]">WATCHOUT</h1>
-          <div className="mt-2 text-2xl font-semibold tracking-[0.28em] text-[#f5a623]">PRODUCER  7.8.14</div>
+          <div className="mb-3 text-[11px] tracking-[0.45em] text-[#f5a623]">MULTI-DISPLAY SHOW CONTROL</div>
+          <h1 className="text-[64px] font-black leading-none tracking-[0.18em] text-[#f5a623]">WatchJhon</h1>
+          <div className="mt-2 text-2xl font-semibold tracking-[0.28em] text-[#f5a623]">PRODUCER  7.8.15</div>
           <p className="mt-6 max-w-xl text-[13px] leading-relaxed text-stone-400">
             Native desktop Producer: Stage, Timeline, Assets, and Runner outputs on real monitors.
             Devices → Assign screens maps each Display to one of your controllers. Devices → Audio → Test beep
@@ -33,8 +34,8 @@ export function WelcomeScreen() {
             <WelcomeBtn label="Demo Show" hint="3-wide LED wall with cues" onClick={openDemo} />
             <WelcomeBtn
               label="Learn More"
-              hint="WATCHOUT 7 documentation"
-              onClick={() => void window.watchout?.openExternal("https://docs.dataton.com/watchout-7-new/watchout/getting-started/welcome-to-watchout-7.html")}
+              hint="About WatchJhon"
+              onClick={() => useApp.getState().setDialog("about")}
             />
           </div>
           <input
@@ -76,9 +77,10 @@ export function WelcomeScreen() {
           )}
         </div>
         <div className="mt-6 text-[11px] text-stone-600">
-          WATCHOUT Producer is a desktop app. Shows save as .watch.json. Media is copied into the local Asset Manager with codec proxies when needed.
+          WatchJhon is a desktop app. Shows save as .watch.json. Media is copied into the local Asset Manager with codec proxies when needed.
         </div>
       </div>
+      <Dialogs />
     </div>
   );
 }
