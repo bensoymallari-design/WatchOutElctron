@@ -74,6 +74,16 @@ function namesRelated(a: string, b: string) {
   return shorter.length >= 8 && longer.startsWith(shorter);
 }
 
+/** True when find_sources gave a usable NDI URL / host:port, not a garbage FFI string. */
+export function looksLikeNdiAddress(value: string) {
+  const s = String(value || "").trim();
+  if (!s || s.length > 260) return false;
+  if (/^ndi:/i.test(s)) return true;
+  if (/^\d{1,3}(?:\.\d{1,3}){3}(?::\d+)?$/.test(s)) return true;
+  if (/^[A-Za-z0-9._-]+:\d+$/.test(s)) return true;
+  return false;
+}
+
 function hostPart(ip?: string) {
   if (!ip) return "";
   return ip.replace(/:\d+$/, "").trim().toLowerCase();

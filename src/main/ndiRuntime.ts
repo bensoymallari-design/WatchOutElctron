@@ -2,7 +2,17 @@ import { createRequire } from "node:module";
 import { dirname } from "node:path";
 import { NDI_RUNTIME_URL, resolveNdiLibrary } from "./ndiLibrary";
 import { downscaleBgra, fourccLabel, videoToBgra } from "./ndiPixels";
-import { collapseSources, isNoiseNdiName, type NdiAdvert } from "../renderer/lib/ndiNames";
+import {
+  NDI_FRAME_ERROR,
+  NDI_FRAME_VIDEO,
+  asNativePtr,
+  bindMemcpy,
+  copyNdiPointer,
+  ndiFrameKindName,
+  readNdiVideoHeader,
+  type MemcpyFn,
+} from "./ndiCopy";
+import { collapseSources, isNoiseNdiName, looksLikeNdiAddress, type NdiAdvert } from "../renderer/lib/ndiNames";
 
 const require = createRequire(import.meta.url);
 
@@ -17,12 +27,15 @@ interface NdiApi {
     recv_connect: (recv: unknown, src: unknown) => void;
     recv_destroy: (recv: unknown) => void;
     recv_capture: (recv: unknown, video: unknown, audio: unknown, meta: unknown, ms: number) => number;
+    recv_capture_raw: ((recv: unknown, video: unknown, audio: unknown, meta: unknown, ms: number) => number) | null;
     recv_free_video: (recv: unknown, video: unknown) => void;
+    recv_no_connections: ((recv: unknown) => number) | null;
     Source: KoffiType;
     RecvCreate: KoffiType;
     VideoFrame: KoffiType;
   videoSize: number;
   koffi: Koffi;
+  memcpy: MemcpyFn | null;
 }
 
 export interface NdiRawFrame {
@@ -47,8 +60,9 @@ let lastEncode = 0;
 let onFrame: FrameHandler | null = null;
 let onLog: LogHandler | null = null;
 let loggedFirst = false;
+let lastHeaderLog = 0;
 let connectedAt = 0;
-let triedNullRecv = false;
+let recvMode: "bgra" | "default" | "fastest" = "bgra";
 let lastLoadError = "";
 
 export function setNdiFrameHandler(fn: FrameHandler | null) {
@@ -158,18 +172,25 @@ function loadApi(): NdiApi | null {
     const recv_create = lib.func("void *NDIlib_recv_create_v3(NDIlib_recv_create_v3_t *p_create_settings)");
     const recv_connect = lib.func("void NDIlib_recv_connect(void *p_instance, NDIlib_source_t *p_src)");
     const recv_destroy = lib.func("void NDIlib_recv_destroy(void *p_instance)");
+    // _Out_ copies the filled video_frame back to a JS object. Electron cannot koffi.view() p_data.
     const recv_capture = (tryFunc(
       lib,
-      "int NDIlib_recv_capture_v3(void *p_instance, _Out_ NDIlib_video_frame_v2_t *p_video_data, void *p_audio_data, void *p_metadata, uint32_t timeout_in_ms)",
+      "int NDIlib_recv_capture_v2(void *p_instance, _Out_ NDIlib_video_frame_v2_t *p_video_data, void *p_audio_data, void *p_metadata, uint32_t timeout_in_ms)",
+    ) ??
+      lib.func(
+        "int NDIlib_recv_capture_v3(void *p_instance, _Out_ NDIlib_video_frame_v2_t *p_video_data, void *p_audio_data, void *p_metadata, uint32_t timeout_in_ms)",
+      )) as NdiApi["recv_capture"];
+    const recv_capture_raw = (tryFunc(
+      lib,
+      "int NDIlib_recv_capture_v2(void *p_instance, void *p_video_data, void *p_audio_data, void *p_metadata, uint32_t timeout_in_ms)",
     ) ??
       tryFunc(
         lib,
-        "int NDIlib_recv_capture_v2(void *p_instance, _Out_ NDIlib_video_frame_v2_t *p_video_data, void *p_audio_data, void *p_metadata, uint32_t timeout_in_ms)",
-      ) ??
-      lib.func(
-        "int NDIlib_recv_capture_v2(void *p_instance, NDIlib_video_frame_v2_t *p_video_data, void *p_audio_data, void *p_metadata, uint32_t timeout_in_ms)",
-      )) as NdiApi["recv_capture"];
+        "int NDIlib_recv_capture_v3(void *p_instance, void *p_video_data, void *p_audio_data, void *p_metadata, uint32_t timeout_in_ms)",
+      )) as NdiApi["recv_capture_raw"];
     const recv_free_video = lib.func("void NDIlib_recv_free_video_v2(void *p_instance, NDIlib_video_frame_v2_t *p_video_data)");
+    const recv_no_connections = tryFunc(lib, "int NDIlib_recv_get_no_connections(void *p_instance)") as NdiApi["recv_no_connections"];
+    const memcpy = bindMemcpy(koffi);
     if (initialize && !initialize()) {
       lastLoadError = `NDI DLL is at ${dll} but NDIlib_initialize failed. Companion DLLs in that folder may be missing.`;
       api = null;
@@ -188,12 +209,15 @@ function loadApi(): NdiApi | null {
       recv_connect,
       recv_destroy,
       recv_capture,
+      recv_capture_raw,
       recv_free_video,
+      recv_no_connections,
       Source,
       RecvCreate,
       VideoFrame,
       videoSize: koffi.sizeof(VideoFrame),
       koffi,
+      memcpy,
     };
     api = loadedApi;
     try {
@@ -209,7 +233,10 @@ function loadApi(): NdiApi | null {
       }
     }
     videoBuf = Buffer.alloc(Math.max(256, loadedApi.videoSize + 64));
-    onLog?.(`NDI Runtime loaded · ${dll}`, "info");
+    onLog?.(
+      `NDI Runtime loaded · ${dll}${memcpy ? " · memcpy pixel copy" : " · koffi.view may fail inside Electron"}`,
+      "info",
+    );
     return loadedApi;
   } catch (error) {
     api = null;
@@ -242,23 +269,27 @@ export function listSdkNdiSources(waitMs = 200): NdiAdvert[] {
   }
 }
 
-function openRecv(src: { p_ndi_name: string; p_url_address: string }) {
+function openRecv(src: { p_ndi_name: string; p_url_address: string }, mode: "bgra" | "default" | "fastest") {
   const loaded = api;
   if (!loaded) return null;
-  // SDK: BGRX_BGRA = 0, UYVY_BGRA = 1. We want converted BGRA frames.
+  // SDK: BGRX_BGRA = 0, UYVY_BGRA = 1, fastest = 100. Nested source_to_connect_to packing is
+  // unreliable in koffi, so create with an empty source (or null) then recv_connect by name.
   const COLOR_BGRX_BGRA = 0;
+  const COLOR_FASTEST = 100;
   const BANDWIDTH_HIGHEST = 100;
   let recv: unknown = null;
-  try {
-    recv = loaded.recv_create({
-      source_to_connect_to: src,
-      color_format: COLOR_BGRX_BGRA,
-      bandwidth: BANDWIDTH_HIGHEST,
-      allow_video_fields: true,
-      p_ndi_recv_name: "WatchJhon",
-    });
-  } catch {
-    recv = null;
+  if (mode !== "default") {
+    try {
+      recv = loaded.recv_create({
+        source_to_connect_to: { p_ndi_name: "", p_url_address: "" },
+        color_format: mode === "fastest" ? COLOR_FASTEST : COLOR_BGRX_BGRA,
+        bandwidth: BANDWIDTH_HIGHEST,
+        allow_video_fields: true,
+        p_ndi_recv_name: "WatchJhon",
+      });
+    } catch {
+      recv = null;
+    }
   }
   if (!recv) {
     try {
@@ -271,36 +302,39 @@ function openRecv(src: { p_ndi_name: string; p_url_address: string }) {
   try {
     loaded.recv_connect(recv, src);
   } catch {
-    /* packed create settings may already have connected */
+    /* ignore */
   }
   return recv;
 }
 
-function emitFrame(video: { xres: number; yres: number; FourCC?: number; p_data: unknown; line_stride_in_bytes: number }) {
+function emitFrame(video: { xres?: unknown; yres?: unknown; FourCC?: unknown; p_data?: unknown; line_stride_in_bytes?: unknown }) {
   const loaded = api;
   if (!loaded || !onFrame || !connectedAssetId || !connectedName) return;
-  const xres = Number(video.xres) || (videoBuf ? videoBuf.readInt32LE(0) : 0);
-  const yres = Number(video.yres) || (videoBuf ? videoBuf.readInt32LE(4) : 0);
-  if (!video.p_data || xres < 2 || yres < 2) {
-    if (!loggedFirst) {
-      loggedFirst = true;
-      onLog?.(
-        `NDI video header was empty (${xres}×${yres}). The Runtime connected but this frame had no pixels.`,
-        "warn",
-      );
+  const header = videoBuf ? readNdiVideoHeader(videoBuf) : null;
+  const xres = Number(video.xres) || header?.xres || 0;
+  const yres = Number(video.yres) || header?.yres || 0;
+  const ptr = asNativePtr(video.p_data) ?? header?.p_data;
+  if (!ptr || xres < 2 || yres < 2) {
+    if (Date.now() - lastHeaderLog > 3000) {
+      lastHeaderLog = Date.now();
+      onLog?.(`NDI video header was empty (${xres}×${yres}). The Runtime connected but this frame had no pixels.`, "warn");
     }
     return;
   }
-  const stride = video.line_stride_in_bytes || 0;
-  const fourcc = Number(video.FourCC || 0) >>> 0;
+  const stride = Number(video.line_stride_in_bytes) || header?.line_stride_in_bytes || 0;
+  const fourcc = Number(video.FourCC || header?.FourCC || 0) >>> 0;
   const rowBytes = stride > 0 ? stride : xres * 4;
   const total = rowBytes * yres;
   if (total <= 0 || total > 48_000_000) return;
   let viewed: Buffer;
   try {
-    viewed = Buffer.from(loaded.koffi.view(video.p_data, total));
+    viewed = copyNdiPointer(loaded.koffi, loaded.memcpy, ptr, total);
   } catch (error) {
     onLog?.(`NDI pixel pointer could not be read: ${error instanceof Error ? error.message : String(error)}`, "warn");
+    return;
+  }
+  if (viewed.length < Math.min(total, 16)) {
+    onLog?.("NDI pixel copy was empty. Electron blocks koffi.view — memcpy should have copied this frame.", "warn");
     return;
   }
   const packed = videoToBgra(viewed, xres, yres, rowBytes, fourcc);
@@ -320,34 +354,62 @@ function emitFrame(video: { xres: number; yres: number; FourCC?: number; p_data:
 
 function captureVideo() {
   const loaded = api;
-  if (!loaded || !recvInst) return { kind: 0, video: null as Record<string, unknown> | null };
+  if (!loaded || !recvInst) return { kind: 0, video: null as Record<string, unknown> | null, freeRef: null as unknown };
   const out: Record<string, unknown> = {};
   try {
-    const kind = loaded.recv_capture(recvInst, out, null, null, 40);
-    return { kind, video: out };
+    const kind = loaded.recv_capture(recvInst, out, null, null, 80);
+    return { kind, video: out, freeRef: out };
   } catch {
-    if (!videoBuf) return { kind: 0, video: null };
+    if (!videoBuf) return { kind: 0, video: null, freeRef: null };
     videoBuf.fill(0);
-    const kind = loaded.recv_capture(recvInst, videoBuf, null, null, 40);
-    if (kind !== 1) return { kind, video: null };
-    return { kind, video: loaded.koffi.decode(videoBuf, loaded.VideoFrame) as Record<string, unknown> };
+    const raw = loaded.recv_capture_raw ?? loaded.recv_capture;
+    const kind = raw(recvInst, videoBuf, null, null, 80);
+    if (kind !== NDI_FRAME_VIDEO) return { kind, video: null, freeRef: videoBuf };
+    let decoded: Record<string, unknown> = {};
+    try {
+      decoded = loaded.koffi.decode(videoBuf, loaded.VideoFrame) as Record<string, unknown>;
+    } catch {
+      decoded = {};
+    }
+    const header = readNdiVideoHeader(videoBuf);
+    if (header) {
+      if (!decoded.xres) decoded.xres = header.xres;
+      if (!decoded.yres) decoded.yres = header.yres;
+      if (!decoded.FourCC) decoded.FourCC = header.FourCC;
+      if (!decoded.p_data) decoded.p_data = header.p_data;
+      if (!decoded.line_stride_in_bytes) decoded.line_stride_in_bytes = header.line_stride_in_bytes;
+    }
+    return { kind, video: decoded, freeRef: videoBuf };
   }
+}
+
+function recreateRecv(mode: "bgra" | "default" | "fastest") {
+  if (!api || !connectedName) return;
+  onLog?.(`NDI still no video — retrying receiver (${mode})`, "warn");
+  try {
+    api.recv_destroy(recvInst);
+  } catch {
+    /* ignore */
+  }
+  recvInst = null;
+  const retry = openRecv({ p_ndi_name: connectedName, p_url_address: "" }, mode);
+  if (retry) recvInst = retry;
 }
 
 function pump() {
   if (!pumping || !api || !recvInst) return;
   try {
-    const { kind, video } = captureVideo();
-    if (kind === 1 && video) {
+    const { kind, video, freeRef } = captureVideo();
+    if (kind === NDI_FRAME_VIDEO && video) {
       try {
         const now = Date.now();
         if (now - lastEncode >= 80) {
           lastEncode = now;
-          emitFrame(video as Parameters<typeof emitFrame>[0]);
+          emitFrame(video);
         }
       } finally {
         try {
-          api.recv_free_video(recvInst, video);
+          api.recv_free_video(recvInst, freeRef ?? video);
         } catch {
           /* ignore */
         }
@@ -356,22 +418,26 @@ function pump() {
       const now = Date.now();
       if (!loggedFirst && now - lastEncode >= 3000) {
         lastEncode = now;
+        let peers = -1;
+        try {
+          peers = api.recv_no_connections?.(recvInst) ?? -1;
+        } catch {
+          peers = -1;
+        }
         const hint =
-          kind === 4
+          kind === NDI_FRAME_ERROR
             ? "NDI dropped the connection. Is OBS Tools → DistroAV NDI Settings → Main Output still on?"
-            : `NDI waiting for video from ${connectedName} (capture ${kind}). OBS Program must be a camera or Color Source — Display Capture of WatchJhon is a loop and Stage stays on NDI PROGRAM rings.`;
+            : `NDI waiting for video from ${connectedName} (capture ${ndiFrameKindName(kind)}${peers >= 0 ? `, ${peers} sender` : ""}). OBS Program must be a camera or Color Source — Display Capture of WatchJhon is a loop and Stage stays on NDI PROGRAM rings.`;
         onLog?.(hint, "warn");
       }
-      if (!loggedFirst && !triedNullRecv && connectedAt && now - connectedAt > 2500 && api && connectedName) {
-        triedNullRecv = true;
-        onLog?.("NDI still no video — retrying with default receiver settings", "warn");
-        try {
-          api.recv_destroy(recvInst);
-        } catch {
-          /* ignore */
+      if (!loggedFirst && connectedAt && api && connectedName) {
+        if (recvMode === "bgra" && now - connectedAt > 2500) {
+          recvMode = "default";
+          recreateRecv("default");
+        } else if (recvMode === "default" && now - connectedAt > 5000) {
+          recvMode = "fastest";
+          recreateRecv("fastest");
         }
-        const retry = openRecv({ p_ndi_name: connectedName, p_url_address: "" });
-        if (retry) recvInst = retry;
       }
     }
   } catch (error) {
@@ -428,9 +494,10 @@ export function connectNdiRecv(assetId: string, sourceName: string) {
   const sources = listSdkNdiSources(250);
   const match = pickSource(sources, sourceName);
   const name = match?.name || sourceName;
-  const url = match?.ip || "";
+  const url = looksLikeNdiAddress(match?.ip || "") ? String(match?.ip) : "";
   const src = { p_ndi_name: name, p_url_address: url };
-  const recv = openRecv(src);
+  recvMode = "bgra";
+  const recv = openRecv(src, "bgra");
   if (!recv) {
     return { ok: false as const, error: `Could not connect to ${sourceName}` };
   }
@@ -439,8 +506,8 @@ export function connectNdiRecv(assetId: string, sourceName: string) {
   connectedName = name;
   loggedFirst = false;
   lastEncode = 0;
+  lastHeaderLog = 0;
   connectedAt = Date.now();
-  triedNullRecv = false;
   pumping = true;
   setTimeout(pump, 0);
   onLog?.(

@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { collapseSources, friendlyNdiName, isNoiseNdiName, mergeNdiLists, tidyNdiName } from "./ndiNames";
+import { collapseSources, friendlyNdiName, isNoiseNdiName, looksLikeNdiAddress, mergeNdiLists, tidyNdiName } from "./ndiNames";
 
 test("tidy NDI names drop duplicate parenthetical fragments", () => {
   assert.equal(tidyNdiName("LOCALHOST (Qubit Jhon NDI)(ubit Jhon NDI)"), "LOCALHOST (Qubit Jhon NDI)");
@@ -60,4 +60,13 @@ test("DistroAV KeepAliveServer rows are noise and never listed", () => {
   assert.equal(out.length, 1);
   assert.equal(out[0].name, "HPVS-BPXL-12 (QUBITNDI)");
   assert.equal(friendlyNdiName(out[0].name), "QUBITNDI");
+});
+
+test("NDI connect only uses find_sources URLs that look like host:port", () => {
+  assert.equal(looksLikeNdiAddress("192.168.8.12:5961"), true);
+  assert.equal(looksLikeNdiAddress("HPVS-BPXL-12:5961"), true);
+  assert.equal(looksLikeNdiAddress("10.0.0.5"), true);
+  assert.equal(looksLikeNdiAddress(""), false);
+  assert.equal(looksLikeNdiAddress("HPVS-BPXL-12 (QUBITNDI)"), false);
+  assert.equal(looksLikeNdiAddress("not a url \u0000 garbage"), false);
 });
