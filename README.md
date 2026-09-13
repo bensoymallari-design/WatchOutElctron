@@ -53,9 +53,9 @@ npm run dist:win
 
 The installer is:
 
-`release/WatchJhon-Setup-7.8.16.exe`
+`release/WatchJhon-Setup-7.8.17.exe`
 
-Double-click it. It adds **WatchJhon** to the Start Menu and desktop. That `.exe` is what you copy to other PCs. The splash screen must say **PRODUCER 7.8.16**. The header also shows **7.8.16**.
+Double-click it. It adds **WatchJhon** to the Start Menu and desktop. That `.exe` is what you copy to other PCs. The splash screen must say **PRODUCER 7.8.17**. The header also shows **7.8.17**.
 
 If `electron` is missing after install (the `install scripts not yet covered by allowScripts` warning), run the three `approve` commands, then `npm install` again, then `npm run dist:win`.
 
@@ -95,6 +95,6 @@ If the beep works but the video is silent, click **Assets → Rebuild HQ** (need
 - **Director clock** — playhead in the Producer, pushed to outputs every frame (background throttling disabled)
 - **Runner outputs** — one native window per display, pixel-perfect clip of the stage
 - **Asset Manager** — copies media into userData, optional ffmpeg proxy
-- **LAN helper** — `http://127.0.0.1:4735` for phone-camera WebRTC. NDI discovery listens on mDNS `5353` and, when present, the NDI Runtime SDK finder, so OBS Studio, Resolume, and NDI cameras appear in **Assets → NDI**. Frames are received in the main process via `Processing.NDI.Lib.x64.dll` (NDI Runtime / Resolume / OBS) and painted into Stage and Output windows. Chromium never decodes native NDI. [NDI Runtime](https://ndi.video/tools/ndi-runtime/) is enough if Resolume is not installed — full NDI Tools / Webcam Input is not required.
+- **LAN helper** — `http://127.0.0.1:4735` for phone-camera WebRTC. NDI discovery listens on mDNS `5353`. The NDI Runtime DLL runs in a **separate helper process** (not Chromium) so OBS/Resolume receive cannot take down Producer. Frames are downscaled and painted into Stage and Output. [NDI Runtime](https://ndi.video/tools/ndi-runtime/) is enough if Resolume is not installed.
 
 Keyboard and window layout: Alt+0 reset, Alt+1 programming, Alt+2 live.

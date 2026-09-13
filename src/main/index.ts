@@ -18,7 +18,7 @@ import { autosave, loadRecents, openShowDialog, readShowFile, rememberShow, save
 import { startSignalServer } from "./signaling";
 import { discoverNdiSources, lanIPv4, startNdiFinder, stopNdiFinder } from "../renderer/lib/ndiDiscover";
 import { mergeNdiLists } from "../renderer/lib/ndiNames";
-import { connectNdiRecv, disconnectNdiRecv, listSdkNdiSources, ndiStatus } from "./ndiRuntime";
+import { connectNdiRecv, disconnectNdiRecv, listSdkNdiSources, ndiStatus, startNdiHelper, stopNdiHelper } from "./ndiHost";
 import type { ClockPayload, ImportedMedia, OpenOutputOptions } from "../shared/ipc";
 
 registerMediaScheme();
@@ -163,7 +163,7 @@ function bindIpc() {
     const status = ndiStatus();
     try {
       const mdns = await discoverNdiSources(4500);
-      const sdk = listSdkNdiSources(status.runtime ? 400 : 0);
+      const sdk = status.runtime ? await listSdkNdiSources(400) : [];
       return {
         sources: mergeNdiLists(mdns, sdk),
         lan: lanIPv4(),
@@ -173,7 +173,7 @@ function bindIpc() {
       };
     } catch (error) {
       return {
-        sources: listSdkNdiSources(status.runtime ? 400 : 0),
+        sources: status.runtime ? await listSdkNdiSources(400) : [],
         lan: lanIPv4(),
         ok: false,
         error: error instanceof Error ? error.message : "NDI scan failed",
@@ -218,6 +218,7 @@ app.whenReady().then(() => {
   session.defaultSession.setPermissionCheckHandler(() => true);
   startSignalServer();
   startNdiFinder();
+  startNdiHelper();
   if (process.platform === "win32") app.setAppUserModelId("com.watchjhon.producer");
   blocker = powerSaveBlocker.start("prevent-display-sleep");
   powerSaveBlocker.start("prevent-app-suspension");
@@ -235,13 +236,13 @@ app.whenReady().then(() => {
 });
 
 app.on("before-quit", () => {
-  disconnectNdiRecv();
+  stopNdiHelper();
   stopNdiFinder();
 });
 
 app.on("window-all-closed", () => {
   if (blocker != null) powerSaveBlocker.stop(blocker);
-  disconnectNdiRecv();
+  stopNdiHelper();
   stopNdiFinder();
   if (process.platform !== "darwin") app.quit();
 });
