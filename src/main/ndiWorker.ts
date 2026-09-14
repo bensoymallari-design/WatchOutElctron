@@ -29,7 +29,7 @@ setNdiFrameHandler((frame) => {
     sourceName: frame.sourceName,
     width: frame.width,
     height: frame.height,
-    bgra: clonePixels(frame.bgra),
+    rgba: clonePixels(frame.bgra),
   });
 });
 

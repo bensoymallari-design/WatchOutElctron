@@ -58,7 +58,13 @@ const api = {
   disconnectNdi: (assetId?: string) => ipcRenderer.invoke("ndi:disconnect", assetId) as Promise<void>,
   ndiStatus: () => ipcRenderer.invoke("ndi:status") as Promise<NdiStatus>,
   onNdiFrame: (cb: (payload: NdiFramePayload) => void) => {
-    const listener = (_e: Electron.IpcRendererEvent, payload: Record<string, unknown>) => {
+    let latest: Record<string, unknown> | null = null;
+    let scheduled = false;
+    const flush = () => {
+      scheduled = false;
+      const payload = latest;
+      latest = null;
+      if (!payload) return;
       cb({
         assetId: String(payload.assetId || ""),
         width: Number(payload.width) || 0,
@@ -67,6 +73,12 @@ const api = {
         jpeg: typeof payload.jpegBase64 === "string" ? payload.jpegBase64 : undefined,
         rgba: copyPixelBytes(payload.rgba) ?? undefined,
       });
+    };
+    const listener = (_e: Electron.IpcRendererEvent, payload: Record<string, unknown>) => {
+      latest = payload;
+      if (scheduled) return;
+      scheduled = true;
+      queueMicrotask(flush);
     };
     ipcRenderer.on("ndi:frame", listener);
     return () => ipcRenderer.removeListener("ndi:frame", listener);

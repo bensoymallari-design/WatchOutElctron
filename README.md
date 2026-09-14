@@ -53,9 +53,9 @@ npm run dist:win
 
 The installer is:
 
-`release/WatchJhon-Setup-7.8.29.exe`
+`release/WatchJhon-Setup-7.8.30.exe`
 
-Double-click it. It adds **WatchJhon** to the Start Menu and desktop. That `.exe` is what you copy to other PCs. The splash screen must say **PRODUCER 7.8.29**. The header also shows **7.8.29**. Do not stash `package.json` before the build — that keeps the old splash version.
+Double-click it. It adds **WatchJhon** to the Start Menu and desktop. That `.exe` is what you copy to other PCs. The splash screen must say **PRODUCER 7.8.30**. The header also shows **7.8.30**. Do not stash `package.json` before the build — that keeps the old splash version.
 
 If `electron` is missing after install (the `install scripts not yet covered by allowScripts` warning), run the three `approve` commands, then `npm install` again, then `npm run dist:win`.
 
@@ -83,7 +83,7 @@ Installers land in `release/`. Windows builds an NSIS setup; they are unsigned, 
 3. Drag assets onto **Stage** (drop on one Display to fill only that screen) or **Timeline**. **Import** and double-click snap the clip across **all controllers** (the wall). Select the cue → **Fit wall** / **Snap to all displays** if you need to re-fit. Drag the clip to move X/Y; drag the amber squares on its sides to stretch it onto a Display (edges snap). Arrow keys nudge 1 px, Shift+arrows 10 px. Audio-only files go on the timeline; they play even with no picture. Files over ~2 GB are **linked** (not copied). Files around 100 GB stream from the original NVMe path — do not Rebuild HQ those masters.
 4. Win+P → **Extend**. Stage → grid icon: **4 columns × 1 row** (or 2×2) for four controllers. Drag Displays flush. **Devices → Find screens → Assign screens**. Then **Output all**. Press **Space** — one video, one clock, four slices. The same **Monitor** list is on the Display in Properties. On a **laptop** (Victus etc.) use **Output** (one screen) and a **1080p** WebM; **Output all** at full size is for the show PC. Transcode makes the file *playable* in Chromium — it is not Resolume DXV. Each Output window still decodes the whole VP9 clip; Producer now freezes the Stage/Assets preview while outputs are up so the laptop is not decoding it twice.
 5. **Several HDMI capture cards:** plug them all in. **Devices → Capture cards → Find cards** (or Assets → Find capture). Each row is one card. Pick which **Display** it fills, then **Connect**. Four cards can feed four controllers. Changing the Display dropdown moves that live cue onto that screen.
-6. **OBS DistroAV / Resolume NDI:** DistroAV 6.2 already loaded NDI 6.3 — you do **not** need NDI Tools. Connect `HPVS-BPXL-12 (QUBITNDI)`. **Program must be a camera or Color Source.** Display Capture of WatchJhon is a loop. **Stage is a 960-wide preview** so Producer stays smooth; **Output all** paints the sender’s full raster on the wall. Splash **7.8.29**.
+6. **OBS DistroAV / Resolume NDI:** DistroAV 6.2 already loaded NDI 6.3 — you do **not** need NDI Tools. Connect `HPVS-BPXL-12 (QUBITNDI)`. **Program must be a camera or Color Source.** Display Capture of WatchJhon is a loop. Stage is a 960 preview; **Output all** uses the sender raster with latest-frame (low delay). Splash **7.8.30**.
 7. **Devices → Audio**: pick **Speakers (Realtek)** (not HDMI/TV) → **Test beep**. Click the Stage, press **Space**. Cue **Volume** in Properties is 0–100. Two clips overlapping? Select the first on the Timeline (playhead stays put) → **Mute audio** — picture still plays, soundtrack off. Timelines **Loop** by default for long-run events; the show autosaves every minute while open.
 8. Space play/pause, Esc stop. Click a Timeline clip to edit Properties without jumping back to its start. Drag the ruler to scrub. File → Save writes `.watch.json`.
 

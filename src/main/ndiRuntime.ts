@@ -1,7 +1,7 @@
 import { createRequire } from "node:module";
 import { dirname } from "node:path";
 import { NDI_RUNTIME_URL, resolveNdiLibrary } from "./ndiLibrary";
-import { NDI_OUTPUT_MAX_WIDTH, downscaleBgra, fourccLabel, videoToBgra } from "./ndiPixels";
+import { NDI_OUTPUT_MAX_WIDTH, downscaleBgra, fourccLabel, videoToRgba } from "./ndiPixels";
 import {
   NDI_FRAME_ERROR,
   NDI_FRAME_VIDEO,
@@ -62,8 +62,13 @@ let onLog: LogHandler | null = null;
 let loggedFirst = false;
 let lastHeaderLog = 0;
 let connectedAt = 0;
-let recvMode: "bgra" | "default" | "fastest" = "bgra";
+let recvMode: "rgba" | "bgra" | "default" | "fastest" = "rgba";
 let lastLoadError = "";
+let lastSend = 0;
+let sendTimer: ReturnType<typeof setTimeout> | null = null;
+type HeldRaw = { width: number; height: number; stride: number; fourCC: number; pixels: Buffer };
+let heldRaw: HeldRaw | null = null;
+const MIN_SEND_GAP_MS = 8;
 
 export function setNdiFrameHandler(fn: FrameHandler | null) {
   onFrame = fn;
@@ -269,22 +274,25 @@ export function listSdkNdiSources(waitMs = 200): NdiAdvert[] {
   }
 }
 
-function openRecv(src: { p_ndi_name: string; p_url_address: string }, mode: "bgra" | "default" | "fastest") {
+function openRecv(src: { p_ndi_name: string; p_url_address: string }, mode: "rgba" | "bgra" | "default" | "fastest") {
   const loaded = api;
   if (!loaded) return null;
-  // SDK: BGRX_BGRA = 0, UYVY_BGRA = 1, fastest = 100. Nested source_to_connect_to packing is
+  // SDK: BGRX_BGRA = 0, UYVY_BGRA = 1, RGBX_RGBA = 2, fastest = 100.
+  // RGBA skips a BGRA→canvas swap. Nested source_to_connect_to packing is
   // unreliable in koffi, so create with an empty source (or null) then recv_connect by name.
   const COLOR_BGRX_BGRA = 0;
+  const COLOR_RGBX_RGBA = 2;
   const COLOR_FASTEST = 100;
   const BANDWIDTH_HIGHEST = 100;
   let recv: unknown = null;
   if (mode !== "default") {
     try {
+      const color = mode === "fastest" ? COLOR_FASTEST : mode === "rgba" ? COLOR_RGBX_RGBA : COLOR_BGRX_BGRA;
       recv = loaded.recv_create({
         source_to_connect_to: { p_ndi_name: "", p_url_address: "" },
-        color_format: mode === "fastest" ? COLOR_FASTEST : COLOR_BGRX_BGRA,
+        color_format: color,
         bandwidth: BANDWIDTH_HIGHEST,
-        allow_video_fields: true,
+        allow_video_fields: false,
         p_ndi_recv_name: "WatchJhon",
       });
     } catch {
@@ -307,9 +315,9 @@ function openRecv(src: { p_ndi_name: string; p_url_address: string }, mode: "bgr
   return recv;
 }
 
-function emitFrame(video: { xres?: unknown; yres?: unknown; FourCC?: unknown; p_data?: unknown; line_stride_in_bytes?: unknown }) {
+function holdVideo(video: { xres?: unknown; yres?: unknown; FourCC?: unknown; p_data?: unknown; line_stride_in_bytes?: unknown }) {
   const loaded = api;
-  if (!loaded || !onFrame || !connectedAssetId || !connectedName) return;
+  if (!loaded || !connectedAssetId || !connectedName) return;
   const header = videoBuf ? readNdiVideoHeader(videoBuf) : null;
   const xres = Number(video.xres) || header?.xres || 0;
   const yres = Number(video.yres) || header?.yres || 0;
@@ -337,22 +345,29 @@ function emitFrame(video: { xres?: unknown; yres?: unknown; FourCC?: unknown; p_
     onLog?.("NDI pixel copy was empty. Electron blocks koffi.view — memcpy should have copied this frame.", "warn");
     return;
   }
-  const packed = videoToBgra(viewed, xres, yres, rowBytes, fourcc);
-  const scaled = downscaleBgra(packed, xres, yres, NDI_OUTPUT_MAX_WIDTH);
+  heldRaw = { width: xres, height: yres, stride: rowBytes, fourCC: fourcc, pixels: viewed };
+}
+
+function encodeHeld(): NdiRawFrame | null {
+  if (!heldRaw || !connectedAssetId || !connectedName) return null;
+  const raw = heldRaw;
+  heldRaw = null;
+  const packed = videoToRgba(raw.pixels, raw.width, raw.height, raw.stride, raw.fourCC);
+  const scaled = downscaleBgra(packed, raw.width, raw.height, NDI_OUTPUT_MAX_WIDTH);
   if (!loggedFirst) {
     loggedFirst = true;
     onLog?.(
-      `NDI picture ${xres}×${yres} ${fourccLabel(fourcc)} — Output ${scaled.width}×${scaled.height}, Stage preview 960`,
+      `NDI picture ${raw.width}×${raw.height} ${fourccLabel(raw.fourCC)} — Output ${scaled.width}×${scaled.height} (low-latency)`,
       "info",
     );
   }
-  onFrame({
+  return {
     assetId: connectedAssetId,
     sourceName: connectedName,
     width: scaled.width,
     height: scaled.height,
     bgra: scaled.bgra,
-  });
+  };
 }
 
 function captureVideo() {
@@ -360,13 +375,13 @@ function captureVideo() {
   if (!loaded || !recvInst) return { kind: 0, video: null as Record<string, unknown> | null, freeRef: null as unknown };
   const out: Record<string, unknown> = {};
   try {
-    const kind = loaded.recv_capture(recvInst, out, null, null, 80);
+    const kind = loaded.recv_capture(recvInst, out, null, null, 1);
     return { kind, video: out, freeRef: out };
   } catch {
     if (!videoBuf) return { kind: 0, video: null, freeRef: null };
     videoBuf.fill(0);
     const raw = loaded.recv_capture_raw ?? loaded.recv_capture;
-    const kind = raw(recvInst, videoBuf, null, null, 80);
+    const kind = raw(recvInst, videoBuf, null, null, 1);
     if (kind !== NDI_FRAME_VIDEO) return { kind, video: null, freeRef: videoBuf };
     let decoded: Record<string, unknown> = {};
     try {
@@ -386,7 +401,7 @@ function captureVideo() {
   }
 }
 
-function recreateRecv(mode: "bgra" | "default" | "fastest") {
+function recreateRecv(mode: "rgba" | "bgra" | "default" | "fastest") {
   if (!api || !connectedName) return;
   onLog?.(`NDI still no video — retrying receiver (${mode})`, "warn");
   try {
@@ -399,17 +414,36 @@ function recreateRecv(mode: "bgra" | "default" | "fastest") {
   if (retry) recvInst = retry;
 }
 
+function clearSendTimer() {
+  if (!sendTimer) return;
+  clearTimeout(sendTimer);
+  sendTimer = null;
+}
+
+function flushHeldFrame() {
+  if (!heldRaw || !onFrame) return;
+  const wait = MIN_SEND_GAP_MS - (Date.now() - lastSend);
+  if (wait > 0) {
+    if (!sendTimer) {
+      sendTimer = setTimeout(() => {
+        sendTimer = null;
+        flushHeldFrame();
+      }, wait);
+    }
+    return;
+  }
+  lastSend = Date.now();
+  const frame = encodeHeld();
+  if (frame) onFrame(frame);
+}
+
 function pump() {
   if (!pumping || !api || !recvInst) return;
   try {
     const { kind, video, freeRef } = captureVideo();
     if (kind === NDI_FRAME_VIDEO && video) {
       try {
-        const now = Date.now();
-        if (now - lastEncode >= 33) {
-          lastEncode = now;
-          emitFrame(video);
-        }
+        holdVideo(video);
       } finally {
         try {
           api.recv_free_video(recvInst, freeRef ?? video);
@@ -417,7 +451,9 @@ function pump() {
           /* ignore */
         }
       }
+      flushHeldFrame();
     } else {
+      flushHeldFrame();
       const now = Date.now();
       if (!loggedFirst && now - lastEncode >= 3000) {
         lastEncode = now;
@@ -434,10 +470,13 @@ function pump() {
         onLog?.(hint, "warn");
       }
       if (!loggedFirst && connectedAt && api && connectedName) {
-        if (recvMode === "bgra" && now - connectedAt > 2500) {
+        if (recvMode === "rgba" && now - connectedAt > 2500) {
+          recvMode = "bgra";
+          recreateRecv("bgra");
+        } else if (recvMode === "bgra" && now - connectedAt > 5000) {
           recvMode = "default";
           recreateRecv("default");
-        } else if (recvMode === "default" && now - connectedAt > 5000) {
+        } else if (recvMode === "default" && now - connectedAt > 7500) {
           recvMode = "fastest";
           recreateRecv("fastest");
         }
@@ -450,7 +489,7 @@ function pump() {
       onLog?.(`NDI capture error: ${error instanceof Error ? error.message : String(error)}`, "warn");
     }
   }
-  if (pumping) setTimeout(pump, 8);
+  if (pumping) setTimeout(pump, 0);
 }
 
 export function connectedNdi() {
@@ -462,6 +501,8 @@ export function disconnectNdiRecv(assetId?: string) {
   pumping = false;
   connectedAssetId = null;
   connectedName = null;
+  clearSendTimer();
+  heldRaw = null;
   if (api && recvInst) {
     try {
       api.recv_connect(recvInst, null);
@@ -499,8 +540,8 @@ export function connectNdiRecv(assetId: string, sourceName: string) {
   const name = match?.name || sourceName;
   const url = looksLikeNdiAddress(match?.ip || "") ? String(match?.ip) : "";
   const src = { p_ndi_name: name, p_url_address: url };
-  recvMode = "bgra";
-  const recv = openRecv(src, "bgra");
+  recvMode = "rgba";
+  const recv = openRecv(src, "rgba");
   if (!recv) {
     return { ok: false as const, error: `Could not connect to ${sourceName}` };
   }
@@ -510,6 +551,9 @@ export function connectNdiRecv(assetId: string, sourceName: string) {
   loggedFirst = false;
   lastEncode = 0;
   lastHeaderLog = 0;
+  lastSend = 0;
+  clearSendTimer();
+  heldRaw = null;
   connectedAt = Date.now();
   pumping = true;
   setTimeout(pump, 0);
