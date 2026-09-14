@@ -6,6 +6,7 @@ import {
   copyBgraRows,
   downscaleBgra,
   FOURCC_BGRA,
+  FOURCC_RGBA,
   FOURCC_UYVY,
   fourccLabel,
   isBgraFourCC,
@@ -14,6 +15,7 @@ import {
   swapRedBlue,
   uyvyToBgra,
   videoToBgra,
+  videoToRgba,
 } from "./ndiPixels";
 
 test("BGRA FourCC matches NDI BGRA/BGRX", () => {
@@ -68,6 +70,21 @@ test("swapRedBlue turns BGRA into canvas RGBA", () => {
   const bgra = Buffer.from([9, 8, 7, 255]);
   const rgba = swapRedBlue(bgra);
   assert.deepEqual([...rgba], [7, 8, 9, 255]);
+});
+
+test("videoToRgba keeps NDI RGBA for the canvas and swaps BGRA", () => {
+  const rgba = Buffer.from([7, 8, 9, 255]);
+  assert.deepEqual([...videoToRgba(rgba, 1, 1, 4, FOURCC_RGBA)], [7, 8, 9, 255]);
+  const bgra = Buffer.from([9, 8, 7, 255]);
+  assert.deepEqual([...videoToRgba(bgra, 1, 1, 4, FOURCC_BGRA)], [7, 8, 9, 255]);
+});
+
+test("videoToRgba converts UYVY to canvas pixels", () => {
+  const src = Buffer.from([128, 235, 128, 16]);
+  const rgba = videoToRgba(src, 2, 1, 4, FOURCC_UYVY);
+  assert.equal(rgba.length, 8);
+  assert.ok(rgba[0] > 200);
+  assert.ok(rgba[4] < 40);
 });
 
 test("downscaleBgra shrinks 1920-wide frames for the Producer", () => {

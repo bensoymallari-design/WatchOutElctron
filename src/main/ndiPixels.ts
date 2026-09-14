@@ -120,12 +120,43 @@ export function downscaleBgra(src: Buffer, width: number, height: number, maxW: 
 
 export function swapRedBlue(src: Buffer) {
   const out = Buffer.from(src);
+  if (out.byteOffset % 4 === 0 && out.length % 4 === 0) {
+    const px = new Uint32Array(out.buffer, out.byteOffset, out.length >> 2);
+    for (let i = 0; i < px.length; i++) {
+      const p = px[i];
+      px[i] = (p & 0xff00ff00) | ((p & 0xff) << 16) | ((p >> 16) & 0xff);
+    }
+    return out;
+  }
   for (let i = 0; i < out.length; i += 4) {
     const b = out[i];
     out[i] = out[i + 2];
     out[i + 2] = b;
   }
   return out;
+}
+
+/** Canvas pixels. RGBA/RGBX copy; BGRA swap; UYVY convert. */
+export function videoToRgba(
+  src: Buffer,
+  width: number,
+  height: number,
+  stride: number,
+  fourcc: number,
+) {
+  const cc = fourcc >>> 0;
+  const srcStride = stride > 0 ? stride : 0;
+  if (cc === FOURCC_UYVY || (srcStride > 0 && srcStride < width * 3 && srcStride >= width * 2)) {
+    return swapRedBlue(uyvyToBgra(src, width, height, srcStride || width * 2));
+  }
+  const packedRow = width * 4;
+  const rowStride = srcStride || packedRow;
+  if ((cc === FOURCC_RGBA || cc === FOURCC_RGBX) && rowStride === packedRow && src.length >= packedRow * height) {
+    return src.length === packedRow * height ? src : src.subarray(0, packedRow * height);
+  }
+  const packed = copyBgraRows(src, width, height, rowStride);
+  if (cc === FOURCC_RGBA || cc === FOURCC_RGBX) return packed;
+  return swapRedBlue(packed);
 }
 
 /** Fresh Uint8Array (not a Node Buffer pool view) so helper IPC clones as binary. */

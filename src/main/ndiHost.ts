@@ -3,7 +3,7 @@ import { join } from "node:path";
 import { utilityProcess, webContents, type UtilityProcess, type WebContents } from "electron";
 import { asarUnpackedPath, preferPackedPath } from "./ffmpegBins";
 import { NDI_RUNTIME_URL, isBenignHelperStderr, pinNdiRuntimeOnEnv, resolveNdiLibrary } from "./ndiLibrary";
-import { asNodeBuffer, clonePixels, downscaleBgra, NDI_PREVIEW_MAX_WIDTH, swapRedBlue } from "./ndiPixels";
+import { asNodeBuffer, downscaleBgra, NDI_PREVIEW_MAX_WIDTH } from "./ndiPixels";
 import { liveOutputWebContentsIds } from "./outputWindows";
 import type { NdiAdvert } from "../renderer/lib/ndiNames";
 
@@ -48,23 +48,71 @@ function sendFrame(
   wc.send("ndi:frame", payload);
 }
 
-function broadcastFrame(full: {
-  assetId: string;
-  rgba: Uint8Array;
-  jpegBase64: string;
-  width: number;
-  height: number;
-  sourceName: string;
-}, preview: { rgba: Uint8Array; width: number; height: number }) {
+let loggedEmpty = false;
+let queuedFrame: Record<string, unknown> | null = null;
+let flushingFrame = false;
+let lastPreviewAt = 0;
+
+function flushQueuedFrame() {
+  flushingFrame = false;
+  const msg = queuedFrame;
+  queuedFrame = null;
+  if (!msg) return;
+  const width = Number(msg.width);
+  const height = Number(msg.height);
+  const pixels = asNodeBuffer(msg.rgba ?? msg.bgra);
+  if (!pixels.length || width < 2 || height < 2 || pixels.length < width * height * 4) {
+    if (!loggedEmpty) {
+      loggedEmpty = true;
+      for (const wc of webContents.getAllWebContents()) {
+        if (wc.isDestroyed()) continue;
+        wc.send("log", {
+          message: `NDI frame arrived empty (${pixels.length} bytes, ${width}×${height}). Helper IPC did not clone pixels.`,
+          level: "warn",
+        });
+      }
+    }
+    return;
+  }
   const outputIds = liveOutputWebContentsIds();
-  for (const wc of webContents.getAllWebContents()) {
-    if (wc.isDestroyed()) continue;
-    if (outputIds.has(wc.id)) sendFrame(wc, full);
-    else sendFrame(wc, { ...full, rgba: preview.rgba, width: preview.width, height: preview.height });
+  if (outputIds.size) {
+    const full = {
+      assetId: String(msg.assetId),
+      rgba: pixels,
+      jpegBase64: "",
+      width,
+      height,
+      sourceName: String(msg.sourceName || ""),
+    };
+    for (const wc of webContents.getAllWebContents()) {
+      if (wc.isDestroyed() || !outputIds.has(wc.id)) continue;
+      sendFrame(wc, full);
+    }
+  }
+  const now = Date.now();
+  const wantPreview = !outputIds.size || now - lastPreviewAt >= 80;
+  if (wantPreview) {
+    lastPreviewAt = now;
+    const preview =
+      width > NDI_PREVIEW_MAX_WIDTH ? downscaleBgra(pixels, width, height, NDI_PREVIEW_MAX_WIDTH) : { bgra: pixels, width, height };
+    const previewPayload = {
+      assetId: String(msg.assetId),
+      rgba: preview.bgra,
+      jpegBase64: "",
+      width: preview.width,
+      height: preview.height,
+      sourceName: String(msg.sourceName || ""),
+    };
+    for (const wc of webContents.getAllWebContents()) {
+      if (wc.isDestroyed() || outputIds.has(wc.id)) continue;
+      sendFrame(wc, previewPayload);
+    }
+  }
+  if (queuedFrame && !flushingFrame) {
+    flushingFrame = true;
+    queueMicrotask(flushQueuedFrame);
   }
 }
-
-let loggedEmpty = false;
 
 function onWorkerMessage(msg: Record<string, unknown>) {
   if (msg.op === "ready" || msg.op === "status") {
@@ -83,40 +131,11 @@ function onWorkerMessage(msg: Record<string, unknown>) {
     return;
   }
   if (msg.op === "frame") {
-    const width = Number(msg.width);
-    const height = Number(msg.height);
-    const bgra = asNodeBuffer(msg.bgra);
-    if (!bgra.length || width < 2 || height < 2 || bgra.length < width * height * 4) {
-      if (!loggedEmpty) {
-        loggedEmpty = true;
-        for (const wc of webContents.getAllWebContents()) {
-          if (wc.isDestroyed()) continue;
-          wc.send("log", {
-            message: `NDI frame arrived empty (${bgra.length} bytes, ${width}×${height}). Helper IPC did not clone pixels.`,
-            level: "warn",
-          });
-        }
-      }
-      return;
+    queuedFrame = msg;
+    if (!flushingFrame) {
+      flushingFrame = true;
+      queueMicrotask(flushQueuedFrame);
     }
-    const preview = downscaleBgra(bgra, width, height, NDI_PREVIEW_MAX_WIDTH);
-    const previewRgba = clonePixels(swapRedBlue(preview.bgra));
-    const outputIds = liveOutputWebContentsIds();
-    const fullRgba =
-      outputIds.size && (preview.width !== width || preview.height !== height)
-        ? clonePixels(swapRedBlue(bgra))
-        : previewRgba;
-    broadcastFrame(
-      {
-        assetId: String(msg.assetId),
-        rgba: fullRgba,
-        jpegBase64: "",
-        width: outputIds.size ? width : preview.width,
-        height: outputIds.size ? height : preview.height,
-        sourceName: String(msg.sourceName || ""),
-      },
-      { rgba: previewRgba, width: preview.width, height: preview.height },
-    );
     return;
   }
   const id = Number(msg.id);

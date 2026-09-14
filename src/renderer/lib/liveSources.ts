@@ -17,6 +17,7 @@ export interface NdiFramePayload {
 interface LiveEntry {
   video?: HTMLVideoElement;
   canvas?: HTMLCanvasElement;
+  ctx?: CanvasRenderingContext2D | null;
   stream?: MediaStream;
   kind: LiveKind;
   ready: boolean;
@@ -154,6 +155,7 @@ export function attachNdiCanvas(assetId: string) {
 }
 
 function pixelBytes(raw: NdiFramePayload["rgba"] | NdiFramePayload["jpeg"]) {
+  if (raw instanceof Uint8Array) return raw;
   return copyPixelBytes(raw);
 }
 
@@ -170,14 +172,19 @@ export function applyNdiFrame(payload: NdiFramePayload) {
   const h = Number(payload.height);
   const rgba = pixelBytes(payload.rgba);
   if (rgba && w >= 2 && h >= 2 && rgba.length >= w * h * 4) {
+    const current = lives.get(payload.assetId);
+    if (!current) return;
     if (canvas.width !== w || canvas.height !== h) {
       canvas.width = w;
       canvas.height = h;
+      current.ctx = null;
+      current.imageData = undefined;
     }
-    const ctx = canvas.getContext("2d");
+    if (!current.ctx) {
+      current.ctx = canvas.getContext("2d", { desynchronized: true, alpha: false });
+    }
+    const ctx = current.ctx;
     if (!ctx) return;
-    const current = lives.get(payload.assetId);
-    if (!current) return;
     if (!current.imageData || current.imageData.width !== w || current.imageData.height !== h) {
       current.imageData = ctx.createImageData(w, h);
     }
@@ -198,7 +205,7 @@ export function applyNdiFrame(payload: NdiFramePayload) {
     if (!loggedDrop) {
       loggedDrop = true;
       window.__woLog?.(
-        "NDI frame reached Producer but pixels were empty. Rebuild 7.8.29. DistroAV Main Output is on — switch OBS to a camera, not Display Capture of WatchJhon.",
+        "NDI frame reached Producer but pixels were empty. Rebuild 7.8.30. DistroAV Main Output is on — switch OBS to a camera, not Display Capture of WatchJhon.",
         "warn",
       );
     }

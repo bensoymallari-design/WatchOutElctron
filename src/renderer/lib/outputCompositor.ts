@@ -149,9 +149,25 @@ export function syncOutputFrame(host: HTMLElement, show: Show, displayId: string
         media.muted = true;
       }
     } else if (media instanceof HTMLCanvasElement && asset) {
+      const live = getLiveVideo(asset.id);
+      if (asset.kind === "ndi" && live instanceof HTMLCanvasElement && isLiveReady(asset.id)) {
+        if (layer.media !== live && (!live.parentElement || live.parentElement === wrap)) {
+          live.style.width = "100%";
+          live.style.height = "100%";
+          live.style.objectFit = "fill";
+          live.style.display = "block";
+          live.style.border = "0";
+          live.style.outline = "none";
+          live.style.background = "#000";
+          live.style.maxWidth = "none";
+          live.style.maxHeight = "none";
+          layer.media.replaceWith(live);
+          layer.media = live;
+        }
+        if (layer.media === live) continue;
+      }
       const ctx = media.getContext("2d");
       if (ctx) {
-        const live = getLiveVideo(asset.id);
         const raster = liveRasterSize(
           live && typeof live === "object" ? (live as { width?: number; height?: number; videoWidth?: number; videoHeight?: number }) : null,
           asset.width || 1920,
